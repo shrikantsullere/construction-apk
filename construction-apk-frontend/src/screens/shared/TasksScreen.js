@@ -193,7 +193,9 @@ const TasksScreen = ({ navigation }) => {
         if (!payload.dueDate) delete payload.dueDate;
 
         if (editingTask) {
-            success = await updateTask(editingTask._id || editingTask.id, payload);
+            const taskId = editingTask._id || editingTask.id;
+            console.log(`--- [UI] UPDATING TASK [ID: ${taskId}] ---`, payload);
+            success = await updateTask(taskId, payload);
         } else {
             success = await addTask(payload);
         }
@@ -289,14 +291,13 @@ const TasksScreen = ({ navigation }) => {
                             <View style={styles.tableTopRow}>
                                 <View style={styles.tableNameCol}>
                                     <View style={[styles.indicatorLine, { backgroundColor: sc.color }]} />
-                                    <View>
-                                        <Text style={styles.taskTitleText} numberOfLines={1}>{item.title}</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.taskTitleText, { fontSize: width < 380 ? 12 : 14 }]} numberOfLines={1} adjustsFontSizeToFit>{item.title}</Text>
                                         <Text style={styles.projectContextText} numberOfLines={1}>{item.projectId?.name || 'Project Name'}</Text>
                                     </View>
                                 </View>
                                 
                                 <View style={styles.tableMetricCol}>
-                                    <Text style={styles.priorityText}>{item.priority?.toUpperCase()}</Text>
                                     <View style={[styles.miniStatusBadge, { backgroundColor: sc.bg, borderColor: sc.color + '20' }]}>
                                         <Text style={[styles.miniStatusText, { color: sc.color }]}>{sc.label}</Text>
                                     </View>
@@ -304,23 +305,23 @@ const TasksScreen = ({ navigation }) => {
                             </View>
 
                             <View style={styles.tableBottomRow}>
-                                <View style={styles.assigneeCol}>
+                                <View style={[styles.assigneeCol, { flex: 1.5 }]}>
                                     <MaterialCommunityIcons name="account-circle-outline" size={12} color="#94A3B8" />
-                                    <Text style={styles.assigneeText} numberOfLines={1}>
+                                    <Text style={styles.assigneeText} numberOfLines={1} adjustsFontSizeToFit>
                                         {Array.isArray(item.assignedTo) && item.assignedTo.length > 0 
                                             ? item.assignedTo[0].fullName 
                                             : (item.assignedTo?.fullName || 'Unassigned')}
                                     </Text>
                                 </View>
-                                <View style={styles.dateCol}>
+                                <View style={[styles.dateCol, { flex: 1 }]}>
                                     <MaterialCommunityIcons name="calendar-clock" size={12} color="#94A3B8" />
-                                    <Text style={styles.tableDateText}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'No Date'}</Text>
+                                    <Text style={styles.tableDateText} numberOfLines={1}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'No Date'}</Text>
                                 </View>
                                 <View style={styles.actionsCol}>
                                     <TouchableOpacity onPress={() => handleOpenModal(item)}>
                                         <MaterialCommunityIcons name="pencil" size={14} color="#64748B" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => deleteTask(item._id)}>
+                                    <TouchableOpacity onPress={() => deleteTask(item._id || item.id)}>
                                         <MaterialCommunityIcons name="trash-can-outline" size={14} color="#EF4444" />
                                     </TouchableOpacity>
                                 </View>

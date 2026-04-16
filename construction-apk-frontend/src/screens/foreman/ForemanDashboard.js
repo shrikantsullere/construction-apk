@@ -64,13 +64,13 @@ const ForemanDashboard = ({ navigation }) => {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
                 }
             >
-                {/* Header Subtitle */}
+                {/* Header Title & Subtitle */}
                 <View style={styles.headerSubtitleWrap}>
-                    <Text style={styles.headerTitle}>Foreman Dashboard</Text>
-                    <Text style={styles.headerSubtitle}>OWN YOUR TIME. CONTROL YOUR SITE.</Text>
+                    <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>Foreman Dashboard</Text>
+                    <Text style={styles.headerSubtitle} numberOfLines={1} adjustsFontSizeToFit>OWN YOUR TIME. CONTROL YOUR SITE.</Text>
                 </View>
 
-                {/* Quick Actions */}
+                {/* Quick Actions GRID */}
                 <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
                 <View style={styles.actionGrid}>
                     {quickActions.map(action => (
@@ -79,10 +79,10 @@ const ForemanDashboard = ({ navigation }) => {
                             style={[styles.actionCard, { borderLeftColor: action.color }]}
                             onPress={() => action.screen && navigation.navigate(action.screen)}
                         >
-                            <View style={[styles.actionIconWrap, { backgroundColor: action.bg }]}>
-                                <MaterialCommunityIcons name={action.icon} size={20} color={action.color} />
+                            <View style={[styles.actionIconWrap, { backgroundColor: '#F8FAFC' }]}>
+                                <MaterialCommunityIcons name={action.icon} size={14} color={action.color} />
                             </View>
-                            <Text style={styles.actionLabel}>{action.label}</Text>
+                            <Text style={styles.actionLabel} numberOfLines={1} adjustsFontSizeToFit>{action.label}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -157,24 +157,39 @@ const ForemanDashboard = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    scrollContent: { padding: 24, paddingTop: 10 },
+    scrollContent: { padding: 14, paddingTop: 10, paddingBottom: 60 },
 
-    headerSubtitleWrap: { marginBottom: 24, paddingLeft: 2 },
-    headerTitle: { fontSize: 32, fontWeight: '900', color: '#0F172A', letterSpacing: -1 },
-    headerSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 2 },
+    headerSubtitleWrap: { marginBottom: 6, paddingLeft: 2 },
+    headerTitle: { fontSize: width < 380 ? 28 : 32, fontWeight: '900', color: '#0F172A', letterSpacing: -1 },
+    headerSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 1 },
 
-    sectionTitle: { fontSize: 11, fontWeight: '900', color: '#0F172A', letterSpacing: 1.5, marginBottom: 16, marginTop: 10 },
+    sectionTitle: { fontSize: 10, fontWeight: '900', color: '#0F172A', letterSpacing: 1.5, marginBottom: 10, marginTop: 4, paddingLeft: 2 },
     
-    actionGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 12 },
-    actionCard: { width: '48.5%', backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 12, borderLeftWidth: 4, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, flexDirection: 'row', alignItems: 'center' },
-    actionIconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    actionLabel: { fontSize: 12, fontWeight: '800', color: '#1E293B', flex: 1 },
+    actionGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
+    actionCard: { 
+        width: '48.5%', 
+        backgroundColor: '#fff', 
+        borderRadius: 12, 
+        paddingVertical: 8, 
+        paddingHorizontal: 10, 
+        marginBottom: 8, 
+        borderLeftWidth: 3, 
+        flexDirection: 'row', 
+        alignItems: 'center',
+        elevation: 2, 
+        shadowColor: '#000', 
+        shadowOffset: { width: 0, height: 1 }, 
+        shadowOpacity: 0.05, 
+        shadowRadius: 2
+    },
+    actionIconWrap: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+    actionLabel: { fontSize: 13, fontWeight: '800', color: '#1E293B', flex: 1 },
 
-    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 10 },
-    pendingBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-    pendingBadgeText: { fontSize: 10, fontWeight: '900', color: '#EF4444' },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, marginTop: 10 },
+    pendingBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    pendingBadgeText: { fontSize: 9, fontWeight: '900', color: '#EF4444' },
 
-    tasksPremiumCard: { backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
+    tasksPremiumCard: { backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 20 },
     taskItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTopWidth: 1, borderTopColor: '#F8FAFC' },
     taskLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     taskStatusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
@@ -185,12 +200,12 @@ const styles = StyleSheet.create({
     emptyTasksTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A', marginTop: 16 },
     emptyTasksSub: { fontSize: 13, fontWeight: '600', color: '#94A3B8', textAlign: 'center', marginTop: 8 },
 
-    viewMoreBtn: { padding: 16, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F8FAFC', backgroundColor: '#FBFDFF' },
-    viewMoreText: { fontSize: 12, fontWeight: '900', color: '#2563EB' },
+    viewMoreBtn: { padding: 14, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F8FAFC', backgroundColor: '#FBFDFF' },
+    viewMoreText: { fontSize: 11, fontWeight: '900', color: '#2563EB' },
 
-    activityCard: { backgroundColor: '#fff', borderRadius: 20, padding: 8, borderWidth: 1, borderColor: '#F1F5F9' },
-    activityRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-    activityText: { fontSize: 13, fontWeight: '700', color: '#475569', flex: 1 },
+    activityCard: { backgroundColor: '#fff', borderRadius: 20, padding: 4, borderWidth: 1, borderColor: '#F1F5F9' },
+    activityRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+    activityText: { fontSize: 13, fontWeight: '800', color: '#475569', flex: 1 },
 });
 
 export default ForemanDashboard;

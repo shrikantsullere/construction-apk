@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, Modal, ScrollView, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
@@ -314,8 +314,8 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
 const styles = StyleSheet.create({
     headerContainer: {
         backgroundColor: '#FFFFFF',
-        paddingTop: Platform.OS === 'ios' ? 50 : 40,
-        paddingBottom: 15,
+        paddingTop: Platform.OS === 'ios' ? 44 : 32,
+        paddingBottom: 8,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 15,
+        marginBottom: 8,
     },
     userSection: {
         flexDirection: 'row',
@@ -343,17 +343,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     brandTitle: {
-        fontSize: 16,
+        fontSize: Dimensions.get('window').width < 360 ? 14 : 16,
         fontWeight: '900',
         color: '#0F172A',
         letterSpacing: -0.5,
     },
     orgLabel: {
-        fontSize: 14,
+        fontSize: Dimensions.get('window').width < 360 ? 12 : 14,
         fontWeight: '900',
         color: '#2563EB',
         textTransform: 'uppercase',
-        letterSpacing: 1,
+        letterSpacing: 1.5,
     },
     menuBtn: {
         width: 36,
@@ -422,13 +422,13 @@ const styles = StyleSheet.create({
     },
     iconSection: {
         flexDirection: 'row',
-        gap: 12,
+        gap: Platform.OS === 'ios' ? 8 : 4,
         alignItems: 'center',
-        width: 130,
+        width: Platform.OS === 'ios' ? 110 : (Dimensions.get('window').width < 360 ? 90 : 105),
         justifyContent: 'flex-end',
     },
     iconBtn: {
-        padding: 2,
+        padding: 4,
     },
     notificationWrapper: {
         position: 'relative',

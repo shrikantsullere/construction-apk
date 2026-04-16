@@ -156,7 +156,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8FAFC',
     },
     scrollContent: {
-        padding: 16,
+        padding: 14,
+        paddingTop: 10,
         paddingBottom: 40,
     },
     mainCard: {

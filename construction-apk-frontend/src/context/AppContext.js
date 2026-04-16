@@ -3,8 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import api, { setAuthToken } from '../utils/api';
-import { Audio } from 'expo-av';
-import * as Notifications from 'expo-notifications';
+import { useAudioPlayer } from 'expo-audio';
 import { MOCK_PROJECTS, MOCK_TASKS, MOCK_ISSUES, MOCK_MESSAGES, MOCK_USER, MOCK_ACTIVITY } from '../mock/data';
 
 const AppContext = createContext();
@@ -33,25 +32,14 @@ export const AppProvider = ({ children }) => {
     const [lastNotifCount, setLastNotifCount] = useState(0);
     const [lastUnreadCount, setLastUnreadCount] = useState(0);
 
-    // Audio setup
-    const playNotificationSound = async () => {
+    // Audio setup - using modern expo-audio API
+    const notificationPlayer = useAudioPlayer('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+    
+    const playNotificationSound = () => {
         try {
-            await Audio.setAudioModeAsync({
-                playsInSilentModeIOS: true,
-                shouldRouteThroughEarpieceAndroid: false,
-                interruptionModeIOS: 1, 
-                interruptionModeAndroid: 1,
-            });
-            
-            // System-like beep from reliable public assets
-            const { sound } = await Audio.Sound.createAsync(
-                { uri: 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3' },
-                { shouldPlay: true, volume: 1.0 }
-            );
-            
-            sound.setOnPlaybackStatusUpdate((status) => {
-                if (status.didJustFinish) sound.unloadAsync();
-            });
+            if (notificationPlayer) {
+                notificationPlayer.play();
+            }
         } catch (error) {
             console.log('--- SOUND PLAY ERROR ---', error.message);
         }
@@ -87,7 +75,7 @@ export const AppProvider = ({ children }) => {
             const currentUser = restoredUser || user;
             console.log('--- FETCH INITIAL DATA START ---', { role: currentUser?.role });
 
-            const fetchData = async (url, setter, label) => {
+            const fetchData = async (url, setter, label, retryCount = 1) => {
                 try {
                     const res = await api.get(url);
                     console.log(`[Fetch Success] ${label} (${url})`);
@@ -97,25 +85,30 @@ export const AppProvider = ({ children }) => {
                     }
                     return res;
                 } catch (err) {
+                    // Optimized Retry Logic: If it's a network error or 5xx, retry once after 1s
+                    if (retryCount > 0 && (!err.response || err.response.status >= 500)) {
+                        console.warn(`[Retrying] ${label} (${url})...`);
+                        await new Promise(r => setTimeout(r, 1000));
+                        return fetchData(url, setter, label, retryCount - 1);
+                    }
                     console.error(`[Fetch Failed] ${label} (${url}):`, err.response?.status, err.response?.data || err.message);
-                    throw err; // Re-throw to trigger the main catch if needed, but we might want to continue for others
+                    return null;
                 }
             };
 
-            // Run in parallel but handle individually if we want to be more resilient
-            const [projRes, taskRes, jobRes, actsRes, chatRes, notifRes, teamRes, rfiRes, rfiStatsRes] = await Promise.all([
-                fetchData('/projects', setProjects, 'Projects'),
-                fetchData('/tasks', setTasks, 'Tasks'),
-                fetchData('/jobs', setJobs, 'Jobs'),
-                fetchData('/reports/stats', null, 'Stats'),
-                fetchData('/chat/rooms', setChatRooms, 'ChatRooms'),
-                fetchData('/notifications', setNotifications, 'Notifications'),
-                fetchData('/auth/users', setTeamMembers, 'Team'),
-                fetchData('/rfis', setRFIs, 'RFIs'),
-                fetchData('/rfis/stats', setRfiStats, 'RFIStats'),
-                fetchData('/todos', setTodos, 'Todos'),
-                fetchData('/issues', setIssues, 'Issues')
-            ]);
+            // SEQUENTIAL FETCH for stability on mobile devices
+            const projRes = await fetchData('/projects', setProjects, 'Projects');
+            await new Promise(r => setTimeout(r, 100)); // Minor jitter
+            const taskRes = await fetchData('/tasks', setTasks, 'Tasks');
+            const jobRes = await fetchData('/jobs', setJobs, 'Jobs');
+            const actsRes = await fetchData('/reports/stats', null, 'Stats');
+            const chatRes = await fetchData('/chat/rooms', setChatRooms, 'ChatRooms');
+            const notifRes = await fetchData('/notifications', setNotifications, 'Notifications');
+            const teamRes = await fetchData('/auth/users', setTeamMembers, 'Team');
+            const rfiRes = await fetchData('/rfis', setRFIs, 'RFIs');
+            const rfiStatsRes = await fetchData('/rfis/stats', setRfiStats, 'RFIStats');
+            const todoRes = await fetchData('/todos', setTodos, 'Todos');
+            const issueRes = await fetchData('/issues', setIssues, 'Issues');
 
             if (actsRes?.data) {
                 setMetrics(actsRes.data);
@@ -309,14 +302,19 @@ export const AppProvider = ({ children }) => {
         }
     };
 
-    const updateTask = async (id, taskData) => {
+    const updateTask = async (rawId, taskData) => {
+        const id = String(rawId || '').trim();
+        if (!id || id === 'undefined' || id === 'null') {
+            console.error('--- [AppContext] REJECTING UPDATE: INVALID ID ---', { rawId });
+            return false;
+        }
+
         try {
             const statusMap = {
                 'Pending': 'todo', 'In Progress': 'in_progress', 'Done': 'completed',
                 'pending': 'todo', 'in-progress': 'in_progress', 'completed': 'completed'
             };
 
-            // DEFENSIVE: Filter only updateable fields to avoid sending complex objects/internal fields
             const updateableFields = ['title', 'description', 'status', 'priority', 'dueDate', 'assignedTo', 'projectId', 'companyId', 'category', 'startDate', 'assignedRoleType'];
             const payload = {};
 
@@ -326,7 +324,6 @@ export const AppProvider = ({ children }) => {
 
             if (payload.status) payload.status = statusMap[payload.status] || payload.status;
 
-            // Flatten Objects to IDs
             if (payload.projectId && typeof payload.projectId === 'object') {
                 payload.projectId = payload.projectId._id || payload.projectId.id;
             }
@@ -334,24 +331,18 @@ export const AppProvider = ({ children }) => {
                 payload.companyId = payload.companyId._id || payload.companyId.id;
             }
             if (Array.isArray(payload.assignedTo)) {
-                payload.assignedTo = payload.assignedTo.map(a => (typeof a === 'object' ? (a._id || a.id) : a)).filter(id => !!id);
+                payload.assignedTo = payload.assignedTo.map(a => (typeof a === 'object' ? (a._id || a.id) : a)).filter(v => !!v);
             }
 
-            // CRITICAL: If projectId is null/empty, REMOVE IT CATEGORICALLY from payload.
-            // This prevents the "projectId is required" error during PATCH on live backend for older tasks.
-            if (!payload.projectId) {
-                delete payload.projectId;
-            }
-            if (!payload.companyId) {
-                delete payload.companyId;
-            }
+            if (!payload.projectId) delete payload.projectId;
+            if (!payload.companyId) delete payload.companyId;
 
-            console.log('--- FINAL CLEANED PAYLOAD FOR LIVE BACKEND ---', payload);
+            console.log(`--- [AppContext] PATCH /tasks/${id} ---`, payload);
 
             const res = await api.patch(`/tasks/${id}`, payload);
             const updated = res.data;
 
-            setTasks(prev => prev.map(t => (t._id === id || t.id === id) ? { ...t, ...updated } : t));
+            setTasks(prev => prev.map(t => (String(t._id || t.id) === id) ? { ...t, ...updated } : t));
             return true;
         } catch (e) {
             console.error('Update task error', e.response?.data || e.message);

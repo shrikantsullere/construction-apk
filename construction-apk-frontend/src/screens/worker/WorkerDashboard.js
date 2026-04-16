@@ -168,8 +168,8 @@ const WorkerDashboard = ({ navigation, timer, isClockedIn, handleClockToggle, se
 };
 
 const styles = StyleSheet.create({
-    workerContainer: { flex: 1 },
-    workerSubtitle: { fontSize: 24, fontWeight: '900', color: COLORS.primary, letterSpacing: 1.5, marginTop: 4, textTransform: 'uppercase' },
+    workerContainer: { flex: 1, padding: 14, paddingTop: 10 },
+    workerSubtitle: { fontSize: Dimensions.get('window').width < 380 ? 28 : 32, fontWeight: '900', color: COLORS.primary, letterSpacing: -1, marginTop: 4, textTransform: 'uppercase' },
     modernClockCard: { backgroundColor: '#fff', borderRadius: 32, padding: 24, marginBottom: 24, overflow: 'hidden' },
     clockIconBg: { position: 'absolute', right: -40, top: -40, opacity: 0.5 },
     clockTop: { alignItems: 'center', marginBottom: 24 },
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     workerStatValue: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
     workerStatSubValue: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
     workerStatLabel: { fontSize: 8, fontWeight: '800', color: '#64748B', marginTop: 4, letterSpacing: 0.5 },
-    sectionHeaderNew: { fontSize: 13, fontWeight: '900', color: '#0F172A', letterSpacing: 0.5, marginBottom: 16 },
+    sectionHeaderNew: { fontSize: 10, fontWeight: '900', color: '#0F172A', letterSpacing: 1.5, marginBottom: 16, textTransform: 'uppercase' },
     quickActionsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
     quickActionBtn: { flex: 1, alignItems: 'center', gap: 8 },
     quickActionIcon: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },

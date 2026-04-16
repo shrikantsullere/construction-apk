@@ -185,9 +185,9 @@ const ProjectManagerPhotosScreen = () => {
 
             {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} size="large" /> : (
                 <FlatList
-                    key={`grid`}
+                    key={width > 600 ? 'grid3' : width < 380 ? 'list1' : 'grid2'}
                     data={filteredPhotos}
-                    numColumns={2}
+                    numColumns={width > 600 ? 3 : width < 380 ? 1 : 2}
                     keyExtractor={(item) => item._id || item.id}
                     contentContainerStyle={styles.list}
                     showsVerticalScrollIndicator={false}
@@ -200,7 +200,7 @@ const ProjectManagerPhotosScreen = () => {
                         </View>
                     }
                     renderItem={({ item }) => (
-                        <View style={styles.photoCardWrapper}>
+                        <View style={[styles.photoCardWrapper, { width: width > 600 ? '33.33%' : width < 380 ? '100%' : '50%' }]}>
                             <View style={[styles.photoCard, SHADOWS.small]}>
                                 <View style={styles.imageContainer}>
                                     <Image

@@ -15,7 +15,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.buildmaster.pro",
-      "newArchEnabled": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,11 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1D4ED8"
       },
-      "navigationBar": {
-        "backgroundColor": "#0F172A"
-      },
       "softwareKeyboardLayoutMode": "pan",
-      "newArchEnabled": true,
       "package": "com.buildmaster.pro",
       "versionCode": 3,
       "permissions": [
@@ -60,11 +55,12 @@
           "photosPermission": "The app accesses your photos to upload site evidence and drawings.",
           "cameraPermission": "The app uses your camera to capture site photos."
         }
-      ]
+      ],
+      "expo-location",
+      "expo-document-picker",
+      "expo-dev-client",
+      "expo-audio"
     ],
-    "experiments": {
-      "newArchEnabled": true
-    },
     "owner": "naliniparas"
   }
 }

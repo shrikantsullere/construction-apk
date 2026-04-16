@@ -9,7 +9,7 @@ const PROD_URL = 'https://constuctionbackend-production.up.railway.app/api';
 
 const api = axios.create({
     baseURL: PROD_URL, 
-    timeout: 30000, 
+    timeout: 60000, 
 });
 
 let inMemoryToken = null;

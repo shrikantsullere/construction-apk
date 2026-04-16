@@ -114,7 +114,7 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
                     <View style={styles.mainInfo}>
                         <View style={[styles.indicatorLine, { backgroundColor: config.color }]} />
                         <View>
-                            <Text style={styles.tinyName} numberOfLines={1}>{item.name}</Text>
+                            <Text style={[styles.tinyName, { fontSize: width < 380 ? 12 : 13 }]} numberOfLines={1} adjustsFontSizeToFit>{item.name}</Text>
                             <Text style={styles.tinyLoc} numberOfLines={1}>{item.location || 'Site'}</Text>
                         </View>
                     </View>
@@ -201,7 +201,7 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                     <View style={styles.emptyWrap}>
-                        <MaterialCommunityIcons name="office-building-off" size={60} color="#CBD5E1" />
+                        <MaterialCommunityIcons name="office-building" size={60} color="#CBD5E1" />
                         <Text style={styles.emptyText}>No projects found in this portfolio</Text>
                     </View>
                 }

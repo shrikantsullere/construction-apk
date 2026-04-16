@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, Text, StyleSheet, Platform } from 'react-native';
+import { View, TextInput, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import { COLORS, SIZES, SPACING } from '../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         color: COLORS.textPrimary,
-        fontSize: 15,
+        fontSize: Dimensions.get('window').width < 380 ? 13 : 15,
         fontWeight: '500',
     },
     errorInput: {

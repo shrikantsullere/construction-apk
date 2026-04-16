@@ -208,8 +208,8 @@ const ProjectManagerDrawingsScreen = () => {
                 
                 <View style={styles.drawingMainInfo}>
                     <View style={styles.titleRow}>
-                        <Text style={styles.drawingTitleText} numberOfLines={1}>{item.title}</Text>
-                        <View style={[styles.miniStatusBadge, { backgroundColor: config.bg }]}>
+                        <Text style={[styles.drawingTitleText, { fontSize: width < 380 ? 12 : 13 }]} numberOfLines={1} adjustsFontSizeToFit>{item.title}</Text>
+                        <View style={[styles.miniStatusBadge, { backgroundColor: config.bg, minWidth: width < 380 ? 40 : 50, alignItems: 'center' }]}>
                             <Text style={[styles.miniStatusText, { color: config.color }]}>{item.drawingNumber || 'UNSET'}</Text>
                         </View>
                     </View>

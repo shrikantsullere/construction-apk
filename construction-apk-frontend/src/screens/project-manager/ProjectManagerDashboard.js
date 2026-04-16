@@ -64,36 +64,41 @@ const ProjectManagerDashboard = ({ navigation }) => {
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Dashboard</Text>
-                    <Text style={styles.headerSubtitle}>Own Your Time. Control Your Site.</Text>
+                    <Text style={[styles.headerTitle, { fontSize: width < 380 ? 28 : 32 }]}>Dashboard</Text>
+                    <Text style={styles.headerSubtitle} numberOfLines={1} adjustsFontSizeToFit>Own Your Time. Control Your Site.</Text>
                 </View>
 
                 {/* Quick Actions Grid */}
                 <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
                 <View style={styles.grid}>
                     <TouchableOpacity style={[styles.card, { borderLeftColor: '#6366F1' }]} onPress={() => navigation.navigate('CrewClock')}>
-                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="account-clock" size={20} color="#6366F1" /></View>
-                        <Text style={styles.cardLabel}>Clock In Crew</Text>
+                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="account-clock" size={16} color="#6366F1" /></View>
+                        <Text style={styles.cardLabel} numberOfLines={1} adjustsFontSizeToFit>Clock In</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.card, { borderLeftColor: '#F59E0B' }]} onPress={() => navigation.navigate('DailyLogs')}>
-                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="clipboard-text" size={20} color="#F59E0B" /></View>
-                        <Text style={styles.cardLabel}>Daily Log</Text>
+                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="clipboard-text" size={16} color="#F59E0B" /></View>
+                        <Text style={styles.cardLabel} numberOfLines={1} adjustsFontSizeToFit>Add Log</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.card, { borderLeftColor: '#10B981' }]} onPress={() => navigation.navigate('Photos')}>
-                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="camera" size={20} color="#10B981" /></View>
-                        <Text style={styles.cardLabel}>Upload Photo</Text>
+                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="camera" size={16} color="#10B981" /></View>
+                        <Text style={styles.cardLabel} numberOfLines={1} adjustsFontSizeToFit>Photos</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.card, { borderLeftColor: '#3B82F6' }]} onPress={() => navigation.navigate('Drawings')}>
+                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="drawing" size={16} color="#3B82F6" /></View>
+                        <Text style={styles.cardLabel} numberOfLines={1} adjustsFontSizeToFit>Drawings</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.card, { borderLeftColor: '#10B981' }]} onPress={() => navigation.navigate('Tasks')}>
+                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="calendar-check" size={16} color="#10B981" /></View>
+                        <Text style={styles.cardLabel} numberOfLines={1} adjustsFontSizeToFit>Tasks</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.card, { borderLeftColor: '#EF4444' }]} onPress={() => navigation.navigate('PurchaseOrders')}>
-                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="cart" size={20} color="#EF4444" /></View>
-                        <Text style={styles.cardLabel}>Create PO</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.card, { borderLeftColor: '#0D9488' }]} onPress={() => navigation.navigate('ForemanDashboard')}>
-                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="hard-hat" size={20} color="#0D9488" /></View>
-                        <Text style={styles.cardLabel}>Foreman Mgmt</Text>
+                        <View style={styles.cardIconBox}><MaterialCommunityIcons name="receipt" size={16} color="#EF4444" /></View>
+                        <Text style={styles.cardLabel} numberOfLines={1} adjustsFontSizeToFit>Orders</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -284,22 +289,51 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
     scrollContent: { paddingHorizontal: 0, paddingBottom: 10, paddingTop: 10 },
 
-    header: { marginBottom: 20, paddingLeft: 2 },
-    headerTitle: { fontSize: 32, fontWeight: '900', color: '#0F172A', letterSpacing: -1 },
-    headerSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 2 },
+    header: { marginBottom: 6, paddingLeft: 2 },
+    headerTitle: { fontSize: width < 380 ? 28 : 32, fontWeight: '900', color: '#0F172A', letterSpacing: -1 },
+    headerSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 1 },
 
-    sectionTitle: { fontSize: 11, fontWeight: '900', color: '#0F172A', letterSpacing: 1.5, marginBottom: 16, marginTop: 15, paddingLeft: 2 },
+    sectionTitle: { fontSize: 10, fontWeight: '900', color: '#0F172A', letterSpacing: 1.5, marginBottom: 10, marginTop: 4, paddingLeft: 2 },
     
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
-    card: { width: '48.5%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, marginBottom: 12, borderLeftWidth: 4, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3 },
-    cardIconBox: { width: 36, height: 36, backgroundColor: '#F8FAFC', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-    cardLabel: { fontSize: 12, fontWeight: '800', color: '#1E293B' },
+    card: { 
+        width: '48.5%', 
+        backgroundColor: '#FFFFFF', 
+        borderRadius: 12, 
+        paddingVertical: 8, 
+        paddingHorizontal: 10, 
+        marginBottom: 8, 
+        borderLeftWidth: 3, 
+        flexDirection: 'row',
+        alignItems: 'center',
+        elevation: 2, 
+        shadowColor: '#000', 
+        shadowOffset: { width: 0, height: 1 }, 
+        shadowOpacity: 0.05, 
+        shadowRadius: 2
+    },
+    cardIconBox: { 
+        width: 28, 
+        height: 28, 
+        backgroundColor: '#F8FAFC', 
+        borderRadius: 8, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        marginRight: 8 
+    },
+    cardLabel: { 
+        flex: 1,
+        fontSize: width < 380 ? 10 : 11, 
+        fontWeight: '900', 
+        color: '#1E293B', 
+        letterSpacing: -0.2 
+    },
 
     premiumWidget: { 
         backgroundColor: '#FFFFFF', 
         borderRadius: 16, 
-        padding: 20, 
-        marginBottom: 20, 
+        padding: 14, 
+        marginBottom: 16, 
         borderLeftWidth: 4, 
         borderLeftColor: '#4F46E5',
         elevation: 4, 
@@ -313,13 +347,13 @@ const styles = StyleSheet.create({
     iconCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' },
     widgetTitle: { fontSize: 16, fontWeight: '900', color: '#1E293B' },
     
-    widgetContent: { gap: 12 },
-    inputFieldWrap: { gap: 6 },
-    fieldLabel: { fontSize: 10, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
-    textInputBox: { minHeight: 120, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 14, paddingVertical: 12 },
+    widgetContent: { gap: 10 },
+    inputFieldWrap: { gap: 4 },
+    fieldLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
+    textInputBox: { minHeight: 80, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, paddingVertical: 10 },
     mainInput: { fontSize: 13, fontWeight: '700', color: '#1E293B', flex: 1 },
     
-    selectorBox: { height: 48, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    selectorBox: { height: 44, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     selectorBoxActive: { borderColor: '#4F46E5', backgroundColor: '#F5F7FF' },
     selectorLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
     tinyAvatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#E0E7FF', justifyContent: 'center', alignItems: 'center' },
@@ -346,8 +380,8 @@ const styles = StyleSheet.create({
     emptyModalView: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 50 },
     emptyModalTxt: { fontSize: 14, fontWeight: '800', color: '#94A3B8', marginTop: 10 },
 
-    listHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, paddingLeft: 2, marginTop: 25 },
-    listTitleText: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+    listHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, paddingLeft: 2, marginTop: 15 },
+    listTitleText: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
     countBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 1, borderRadius: 8 },
     countText: { fontSize: 11, fontWeight: '900', color: '#64748B' },
     emptyState: { padding: 15, backgroundColor: '#F8FAFC', borderRadius: 12, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1', width: '100%' },

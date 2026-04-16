@@ -132,31 +132,31 @@ const DailyLogsScreen = ({ navigation }) => {
                 onPress={() => {/* Navigate to detail if needed */}}
             >
                 {/* Column: Date & Reporter */}
-                <View style={[styles.column, { flex: 0.8 }]}>
+                <View style={[styles.column, { width: width < 380 ? 60 : 70 }]}>
                     <Text style={styles.cellMainText}>{logDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })}</Text>
-                    <Text style={styles.cellSubText}>{item.reportedBy?.fullName?.split(' ')[0] || 'Jay'}</Text>
+                    <Text style={styles.cellSubText} numberOfLines={1}>{item.reportedBy?.fullName?.split(' ')[0] || 'Jay'}</Text>
                 </View>
 
                 {/* Column: Project & Work Snippet */}
-                <View style={[styles.column, { flex: 2, paddingHorizontal: 10 }]}>
-                    <Text style={styles.cellProjectText} numberOfLines={1}>{item.projectId?.name || 'Unassigned'}</Text>
+                <View style={[styles.column, { flex: 1, paddingHorizontal: 4 }]}>
+                    <Text style={styles.cellProjectText} numberOfLines={1} adjustsFontSizeToFit>{item.projectId?.name || 'Unassigned'}</Text>
                     <Text style={styles.cellWorkText} numberOfLines={1}>{item.workPerformed}</Text>
                 </View>
 
                 {/* Column: Stats */}
-                <View style={[styles.column, { flex: 0.7, alignItems: 'flex-end' }]}>
+                <View style={[styles.column, { width: width < 380 ? 55 : 65, alignItems: 'flex-end' }]}>
                     <View style={styles.statusChip}>
                         <Text style={styles.statusChipText}>{totalManpower} Men</Text>
                     </View>
                     <View style={styles.weatherMiniTag}>
-                        <MaterialCommunityIcons name="thermometer" size={10} color="#EA580C" />
+                        <MaterialCommunityIcons name="thermometer" size={ width < 380 ? 8 : 10} color="#EA580C" />
                         <Text style={styles.weatherMiniText}>{item.weather?.temperature || '0'}°</Text>
                     </View>
                 </View>
 
                 {/* Arrow */}
-                <View style={{ width: 20, alignItems: 'flex-end' }}>
-                    <MaterialCommunityIcons name="chevron-right" size={18} color="#CBD5E1" />
+                <View style={{ width: 16, alignItems: 'flex-end', marginLeft: 4 }}>
+                    <MaterialCommunityIcons name="chevron-right" size={16} color="#CBD5E1" />
                 </View>
             </TouchableOpacity>
         );
@@ -164,10 +164,10 @@ const DailyLogsScreen = ({ navigation }) => {
 
     const TableHeader = () => (
         <View style={styles.tableHeader}>
-            <Text style={[styles.headerLabel, { flex: 0.8 }]}>DATE/BY</Text>
-            <Text style={[styles.headerLabel, { flex: 2, paddingHorizontal: 10 }]}>PROJECT & ACTIVITY</Text>
-            <Text style={[styles.headerLabel, { flex: 0.7, textAlign: 'right' }]}>STATS</Text>
-            <View style={{ width: 20 }} />
+            <Text style={[styles.headerLabel, { width: width < 380 ? 60 : 70 }]}>DATE/BY</Text>
+            <Text style={[styles.headerLabel, { flex: 1, paddingHorizontal: 4 }]}>PROJECT & ACTIVITY</Text>
+            <Text style={[styles.headerLabel, { width: width < 380 ? 55 : 65, textAlign: 'right' }]}>STATS</Text>
+            <View style={{ width: 16, marginLeft: 4 }} />
         </View>
     );
 
