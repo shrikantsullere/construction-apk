@@ -1,0 +1,379 @@
+import { Save, Lock, Camera, Shield, CheckCircle, Loader } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
+
+const Settings = () => {
+  const { user, updateUserData } = useAuth();
+  const [profile, setProfile] = useState({
+    name: user?.fullName || '',
+    email: user?.email || '',
+    role: user?.role || '',
+    avatar: user?.avatar || null
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [password, setPassword] = useState({
+    current: '',
+    new: '',
+    confirm: ''
+  });
+
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.fullName || '',
+        email: user.email || '',
+        role: user.role || '',
+        avatar: user.avatar || null
+      });
+    }
+  }, [user]);
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    try {
+      setIsUpdating(true);
+      const updateData = { 
+        fullName: profile.name, 
+        email: profile.email,
+        avatar: profile.avatar // Include avatar in sync
+      };
+      
+      await api.patch('/auth/profile', updateData);
+      
+      // Critical: Sync local auth context so Sidebar/Navbar update immediately
+      updateUserData(updateData);
+      
+      alert("Profile details updated successfully.");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert("Failed to update profile.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    if (password.new !== password.confirm) {
+      alert("New passwords do not match.");
+      return;
+    }
+    try {
+      await api.patch('/auth/updatepassword', { currentPassword: password.current, newPassword: password.new });
+      alert("Password reset successfully.");
+      setPassword({ current: '', new: '', confirm: '' });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      alert(error.response?.data?.message || "Failed to reset password.");
+    }
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfile({ ...profile, avatar: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-slate-800">Profile Settings</h1>
+        <p className="text-slate-500 text-sm">Update your personal information and security credentials.</p>
+      </div>
+
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+          <h3 className="font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4">Personal Details</h3>
+          <form onSubmit={handleProfileSave} className="space-y-4">
+            <div className="flex items-center gap-6 mb-6">
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-3xl font-bold text-blue-600 overflow-hidden border-4 border-slate-50">
+                  {profile.avatar ? (
+                    <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    profile.name.split(' ').map(n => n[0]).join('')
+                  )}
+                </div>
+                <label className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-md border border-slate-100 text-blue-600 hover:scale-110 transition cursor-pointer">
+                  <Camera size={16} />
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </label>
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800 text-lg">{profile.name}</h4>
+                <p className="text-slate-500 text-sm">{profile.role}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Display Name</label>
+                <input
+                  type="text"
+                  value={profile.name}
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                <input
+                  type="text"
+                  value={profile.role}
+                  disabled
+                  className="w-full bg-slate-100 border border-slate-200 rounded-lg p-2.5 text-slate-500 cursor-not-allowed"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+              <input
+                type="email"
+                value={profile.email}
+                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div className="flex justify-end pt-2">
+              <button 
+                type="submit" 
+                disabled={isUpdating}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition shadow-lg shadow-blue-200 disabled:opacity-50"
+              >
+                {isUpdating ? <Loader className="animate-spin" size={18} /> : <Save size={18} />}
+                {isUpdating ? 'Updating...' : 'Update Details'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+          <h3 className="font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
+            <Lock size={20} className="text-blue-600" /> Security
+          </h3>
+          <form onSubmit={handlePasswordReset} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Current Password</label>
+              <input
+                type="password"
+                value={password.current}
+                onChange={(e) => setPassword({ ...password, current: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={password.new}
+                  onChange={(e) => setPassword({ ...password, new: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={password.confirm}
+                  onChange={(e) => setPassword({ ...password, confirm: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button type="submit" className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded-lg font-medium transition shadow-lg">
+                Change Password
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Role Management Section - Only for Company Admin */}
+        {user?.role === 'COMPANY_OWNER' && (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+            <h3 className="font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4 flex items-center gap-2">
+              <Shield size={20} className="text-blue-600" /> Role Management
+            </h3>
+
+            <RoleSettings />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const RoleSettings = () => {
+  const [activeRole, setActiveRole] = useState('PM');
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [allPermissions, setAllPermissions] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const roleDisplayNames = {
+    'PM': 'Project Manager',
+    'FOREMAN': 'Foreman',
+    'WORKER': 'Worker',
+    'SUBCONTRACTOR': 'Subcontractor',
+    'CLIENT': 'Client',
+    'COMPANY_OWNER': 'Company Owner'
+  };
+
+  const permissionLabels = {
+    'VIEW_DASHBOARD': 'Dashboard',
+    'VIEW_PROJECTS': 'Jobs',
+    'VIEW_TASKS': 'Tasks',
+    'CLOCK_IN_OUT': 'My Clock',
+    'CLOCK_IN_CREW': 'Clock In Crew',
+    'VIEW_TIMESHEETS': 'Timesheets',
+    'VIEW_DAILY_LOGS': 'Daily Logs',
+    'VIEW_DRAWINGS': 'Drawings',
+    'VIEW_PHOTOS': 'Photos',
+    'VIEW_GPS': 'GPS Tracking',
+    'VIEW_EQUIPMENT': 'Equipment',
+    'VIEW_PO': 'Purchase Orders',
+    'VIEW_INVOICES': 'Invoices',
+    'VIEW_CHAT': 'Chat',
+    'VIEW_RFI': 'RFI',
+    'VIEW_REPORTS': 'Reports',
+    'VIEW_PAYROLL': 'Payroll',
+    'VIEW_TEAM': 'Users',
+    'VIEW_ISSUES': 'Issues',
+    'VIEW_PROFILE': 'My Profile',
+    'ACCESS_SETTINGS': 'Settings',
+  };
+
+  const fetchRoles = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/roles');
+      const permissionsMap = {};
+      response.data.forEach(r => {
+        permissionsMap[r.name] = r.permissions;
+      });
+      setAllPermissions(permissionsMap);
+      const ALLOWED_ROLES = ['PM', 'FOREMAN', 'WORKER', 'SUBCONTRACTOR', 'CLIENT'];
+      setRoles(response.data.filter(r => ALLOWED_ROLES.includes(r.name)));
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
+  const handleToggle = (perm) => {
+    const currentPerms = allPermissions[activeRole] || [];
+    const newPerms = currentPerms.includes(perm)
+      ? currentPerms.filter(p => p !== perm)
+      : [...currentPerms, perm];
+
+    setAllPermissions({
+      ...allPermissions,
+      [activeRole]: newPerms
+    });
+  };
+
+  const handleSaveRoles = async () => {
+    try {
+      setIsSubmitting(true);
+      await api.put(`/roles/${activeRole}`, { permissions: allPermissions[activeRole] });
+      alert(`Permissions for ${roleDisplayNames[activeRole] || activeRole} updated successfully.`);
+    } catch (error) {
+      console.error('Error saving permissions:', error);
+      alert("Failed to save permissions.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleBulkSave = async () => {
+    try {
+      setIsSubmitting(true);
+      const roleUpdates = Object.entries(allPermissions).map(([roleName, permissions]) => ({
+        roleName,
+        permissions
+      }));
+      await api.put(`/roles/bulk`, { roleUpdates });
+      alert("All role permissions updated successfully.");
+    } catch (error) {
+      console.error('Error in bulk saving permissions:', error);
+      alert("Failed to save all permissions.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="flex justify-center p-8"><Loader className="animate-spin text-blue-600" /></div>;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Role Tabs */}
+      <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+        {roles.map(role => (
+          <button
+            key={role.name}
+            onClick={() => setActiveRole(role.name)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeRole === role.name
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+              }`}
+          >
+            {roleDisplayNames[role.name] || role.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {Object.entries(permissionLabels).map(([key, label]) => (
+          <label key={key} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition cursor-pointer group">
+            <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${allPermissions[activeRole]?.includes(key)
+              ? 'bg-blue-600 border-blue-600 text-white'
+              : 'bg-white border-slate-300 group-hover:border-blue-400'
+              }`}>
+              {allPermissions[activeRole]?.includes(key) && <CheckCircle size={14} />}
+            </div>
+            <input
+              type="checkbox"
+              className="hidden"
+              checked={allPermissions[activeRole]?.includes(key) || false}
+              onChange={() => handleToggle(key)}
+            />
+            <span className="text-sm text-slate-700 font-medium">{label}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="flex justify-between items-center pt-4 border-t border-slate-50">
+        <button
+          onClick={handleBulkSave}
+          disabled={isSubmitting}
+          className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2.5 rounded-lg font-bold transition disabled:opacity-50"
+        >
+          {isSubmitting ? <Loader size={18} className="animate-spin" /> : <Save size={18} />}
+          Save All Role Changes
+        </button>
+        <button
+          onClick={handleSaveRoles}
+          disabled={isSubmitting}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold transition shadow-lg shadow-blue-200 disabled:opacity-50"
+        >
+          {isSubmitting ? <Loader size={18} className="animate-spin" /> : <Shield size={18} />}
+          Save {roleDisplayNames[activeRole] || activeRole} Only
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default Settings;
