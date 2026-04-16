@@ -1,21 +1,38 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, SIZES } from '../../theme/theme';
+import { COLORS, SPACING, SIZES } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 
 export const ChatTab = ({ project }) => {
-    const { messages, sendMessage } = useApp();
+    const { messages, sendMessage, fetchMessages, user } = useApp();
     const [text, setText] = useState('');
+    const [loading, setLoading] = useState(false);
     const flatListRef = useRef();
 
-    const projectMessages = messages.filter(m => m.projectId === project.id);
+    const targetId = (project._id || project.id)?.toString();
 
-    const handleSend = () => {
+    React.useEffect(() => {
+        const load = async () => {
+            if (!targetId) return;
+            setLoading(true);
+            await fetchMessages(targetId, 'project');
+            setLoading(false);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+        };
+        load();
+    }, [targetId]);
+
+    const projectMessages = (messages || []).filter(m => {
+        const mProjId = m.projectId?.toString();
+        return mProjId === targetId;
+    }).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    const handleSend = async () => {
         if (!text.trim()) return;
-        sendMessage(text, project.id);
+        await sendMessage(text, targetId);
         setText('');
-        setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);
     };
 
     return (
@@ -27,20 +44,27 @@ export const ChatTab = ({ project }) => {
             <FlatList
                 ref={flatListRef}
                 data={projectMessages}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item, index) => item._id || item.id || index.toString()}
                 contentContainerStyle={styles.list}
-                renderItem={({ item }) => (
-                    <View style={[styles.messageWrapper, item.isMe ? styles.myMessage : styles.theirMessage]}>
-                        {!item.isMe && <Text style={styles.sender}>{item.sender}</Text>}
-                        <View style={[styles.bubble, item.isMe ? styles.myBubble : styles.theirBubble]}>
-                            <Text style={[styles.messageText, item.isMe ? styles.myText : styles.theirText]}>
-                                {item.text}
-                            </Text>
+                renderItem={({ item }) => {
+                    const itemSenderId = (item.sender?._id || item.sender || item.senderId)?.toString();
+                    const isMe = itemSenderId === user?._id?.toString() || item.isMe;
+                    const senderName = item.sender?.fullName || item.senderName || item.sender || 'User';
+
+                    return (
+                        <View style={[styles.messageWrapper, isMe ? styles.myMessage : styles.theirMessage]}>
+                            {!isMe && <Text style={styles.sender}>{senderName}</Text>}
+                            <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
+                                <Text style={[styles.messageText, isMe ? styles.myText : styles.theirText]}>
+                                    {item.message || item.text}
+                                </Text>
+                            </View>
+                            <Text style={styles.time}>{item.time || new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                         </View>
-                        <Text style={styles.time}>{item.time}</Text>
-                    </View>
-                )}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+                    );
+                }}
+                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
 
             <View style={styles.inputContainer}>

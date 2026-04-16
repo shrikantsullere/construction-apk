@@ -2,25 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar,
     ActivityIndicator, Platform, ScrollView, Animated, Keyboard,
-    KeyboardAvoidingView, Dimensions
+    KeyboardAvoidingView, Dimensions, Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
-import { COLORS, SHADOWS, SPACING } from '../../theme/theme';
+import { COLORS, SHADOWS, SPACING } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
 // ── Role Credentials from KAAL Backend ──────────────────────────────────────
 const ROLES = [
-    {
-        id: 'SUPER_ADMIN', label: 'Super Admin', icon: 'shield-crown', color: '#7C3AED', bg: '#F5F3FF',
-        email: 'super@admin.com', pass: '123456'
-    },
-    {
-        id: 'COMPANY_OWNER', label: 'Company Admin', icon: 'crown', color: '#D97706', bg: '#FEF3C7',
-        email: 'jay@gmail.com', pass: '123456'
-    },
     {
         id: 'PM', label: 'Project Manager', icon: 'briefcase-account', color: '#1D4ED8', bg: '#EFF6FF',
         email: 'pm@kaal.ca', pass: '123456'
@@ -59,8 +51,8 @@ export default function LoginScreen({ navigation }) {
         try { logout(); } catch (e) { }
         Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
 
-        // Auto-select Company Admin by default as per the guide
-        handleSelectRole(ROLES[1]);
+        // Auto-select Foreman by default as per the guide
+        handleSelectRole(ROLES[0]);
     }, []);
 
     const handleSelectRole = (role) => {
@@ -83,13 +75,13 @@ export default function LoginScreen({ navigation }) {
 
             if (!res?.success) {
                 alert(res?.message || 'Login failed. Please check credentials.');
+                setLoading(false);
             }
             // IMPORTANT: No manual navigation here. 
             // AppNavigation.js will automatically swap the screens when 'user' state updates.
         } catch (err) {
             console.error('Login action error:', err);
             alert('Login error. Check your server connection.');
-        } finally {
             setLoading(false);
         }
     };
@@ -99,17 +91,21 @@ export default function LoginScreen({ navigation }) {
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             <LinearGradient
-                colors={['#0F172A', '#1E293B', '#334155']}
+                colors={['#2E3647', '#1E293B']}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={s.top}
             >
                 <View style={[s.bubble, { top: -60, right: -60, width: 220, height: 220, opacity: 0.1 }]} />
                 <View style={[s.bubble, { bottom: -30, left: -30, width: 140, height: 140, opacity: 0.08 }]} />
+                <View style={[s.bubble, { top: 40, left: -40, width: 100, height: 100, opacity: 0.05 }]} />
+                <View style={[s.bubble, { bottom: 60, right: 20, width: 60, height: 60, opacity: 0.07 }]} />
 
                 <Animated.View style={[s.headerContent, { opacity: fadeAnim }]}>
-                    <View style={s.logoCard}>
-                        <MaterialCommunityIcons name="crane" size={40} color="#fff" />
-                    </View>
+                    <Image 
+                        source={require('../../../assets/logo.webp')} 
+                        style={s.loginLogo} 
+                        resizeMode="contain" 
+                    />
                     <Text style={s.brand}>KAAL<Text style={{ color: '#93C5FD' }}> ERP</Text></Text>
                     <Text style={s.tagline}>Build Smarter. Manage Better.</Text>
                 </Animated.View>
@@ -218,12 +214,10 @@ const s = StyleSheet.create({
     },
     bubble: { position: 'absolute', backgroundColor: '#fff', borderRadius: 999 },
     headerContent: { alignItems: 'center', zIndex: 10 },
-    logoCard: {
-        width: 65, height: 65, borderRadius: 18,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-        marginBottom: 12,
+    loginLogo: {
+        width: 80,
+        height: 80,
+        marginBottom: 10,
     },
     brand: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 2 },
     tagline: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600', marginTop: 4 },

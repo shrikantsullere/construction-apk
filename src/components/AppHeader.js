@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SHADOWS, SPACING } from '../theme/theme';
+import { COLORS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const AppHeader = ({ title, showBack = false }) => {
+const AppHeader = ({ title, showBack = false, showRight = true, showLogo = false }) => {
     const { user, logout } = useApp();
     const navigation = useNavigation();
 
@@ -19,63 +19,80 @@ const AppHeader = ({ title, showBack = false }) => {
 
     return (
         <View style={styles.safeArea}>
-            <LinearGradient
-                colors={['#1E3A8A', '#1D4ED8']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.headerContainer}
-            >
+            <View style={styles.headerContainer}>
                 <View style={styles.leftSection}>
-                    {showBack ? (
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-                            <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={styles.logoBox}>
-                            <MaterialCommunityIcons name="crane" size={20} color="#fff" />
+                     {showBack ? (
+                        <View style={styles.backWrapper}>
+                            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+                                <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.primary} />
+                            </TouchableOpacity>
+                            {title && (
+                                <View style={styles.headerAvatarMini}>
+                                    <Text style={styles.headerAvatarText}>{title.charAt(0)}</Text>
+                                </View>
+                            )}
                         </View>
+                    ) : (
+                        <Image 
+                            source={require('../../assets/logo.webp')} 
+                            style={styles.headerLogo} 
+                            resizeMode="contain"
+                        />
                     )}
-                    <View style={styles.titleBox}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>
-                            {title || 'KAAL ERP'}
-                        </Text>
-                        {!showBack && (
-                            <Text style={styles.userRoleText}>
-                                {user?.role?.replace('_', ' ') || 'ENTERPRISE'}
-                            </Text>
+                </View>
+
+                <View style={styles.centerBranding}>
+                    {title ? (
+                        <Text style={styles.brandTitle} numberOfLines={1}>{title}</Text>
+                    ) : (
+                        <>
+                            <Text style={styles.orgLabel}>Organization</Text>
+                            <Text style={styles.brandTitle}>KAAL Construction</Text>
+                        </>
+                    )}
+                </View>
+
+                {(showRight || showLogo) && (
+                    <View style={styles.rightSection}>
+                        {showLogo && (
+                             <Image 
+                                source={require('../../assets/logo.webp')} 
+                                style={styles.headerLogo} 
+                                resizeMode="contain"
+                            />
+                        )}
+                        {showRight && (
+                            <>
+                                <TouchableOpacity
+                                    onPress={handleLogout}
+                                    style={[styles.logoutIconBtn, SHADOWS.small]}
+                                    activeOpacity={0.7}
+                                >
+                                    <MaterialCommunityIcons name="logout-variant" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={() => navigation.navigate('Profile')}
+                                    style={styles.avatarBtn}
+                                >
+                                    <View style={styles.avatar}>
+                                        <Text style={styles.avatarLetter}>
+                                            {user?.name?.charAt(0) || 'U'}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </>
                         )}
                     </View>
-                </View>
-
-                <View style={styles.rightSection}>
-                    {/* Logout Button directly in header for convenience */}
-                    <TouchableOpacity
-                        onPress={handleLogout}
-                        style={[styles.logoutIconBtn, SHADOWS.small]}
-                        activeOpacity={0.7}
-                    >
-                        <MaterialCommunityIcons name="logout-variant" size={20} color="#fff" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        onPress={() => navigation.navigate('Profile')}
-                        style={styles.avatarBtn}
-                    >
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarLetter}>
-                                {user?.name?.charAt(0) || 'U'}
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-            </LinearGradient>
+                )}
+            </View>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
     safeArea: {
-        backgroundColor: '#1E3A8A',
+        backgroundColor: '#FFFFFF',
         paddingTop: Platform.OS === 'ios' ? 44 : 36,
     },
     headerContainer: {
@@ -84,70 +101,84 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
     },
     leftSection: {
+        width: 60,
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
     },
-    logoBox: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+    headerLogo: {
+        width: 32,
+        height: 32,
+    },
+    centerBranding: {
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
     },
-    iconBtn: {
-        padding: 8,
-        marginRight: 4,
-    },
-    titleBox: {
-        justifyContent: 'center',
-    },
-    headerTitle: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '900',
-        letterSpacing: 0.5,
-    },
-    userRoleText: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
-        fontWeight: '700',
+    orgLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#64748B',
         textTransform: 'uppercase',
+        letterSpacing: 1.2,
+    },
+    brandTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginTop: -1,
     },
     rightSection: {
+        width: 90,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'flex-end',
+        gap: 8,
     },
     logoutIconBtn: {
         width: 38,
         height: 38,
         borderRadius: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        backgroundColor: '#FEF2F2',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
-        marginRight: 4,
+        borderColor: '#FEE2E2',
     },
     avatarBtn: {
         padding: 2,
     },
     avatar: {
-        width: 36,
-        height: 36,
+        width: 38,
+        height: 38,
         borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.25)',
+        backgroundColor: COLORS.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1.5,
-        borderColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#F1F5F9',
+    },
+    headerAvatarMini: {
+        width: 34,
+        height: 34,
+        borderRadius: 8,
+        backgroundColor: '#0F172A', // Deep Black/Navy
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 12,
+    },
+    headerAvatarText: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    backWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     avatarLetter: {
         color: '#fff',

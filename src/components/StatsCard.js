@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../theme/theme';
+import { COLORS } from '../constants/theme';
 
 const StatsCard = ({ label, value, icon, color = COLORS.primary }) => {
     return (

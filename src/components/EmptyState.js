@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING } from '../theme/theme';
+import { COLORS, SPACING } from '../constants/theme';
 
 const EmptyState = ({ title, message, icon = 'tray' }) => {
     return (

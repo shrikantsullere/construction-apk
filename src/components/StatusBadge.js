@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../theme/theme';
+import { COLORS } from '../constants/theme';
 
 const StatusBadge = ({ status }) => {
     const getStatusConfig = () => {

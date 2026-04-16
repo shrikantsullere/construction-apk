@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import {
-    View, Text, StyleSheet, Animated, Dimensions, StatusBar
+    View, Text, StyleSheet, Animated, Dimensions, StatusBar, Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../../theme/theme';
+import { COLORS } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -41,7 +41,7 @@ const SplashScreen = ({ onFinish }) => {
         <View style={styles.root}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             <LinearGradient
-                colors={['#1E3A8A', '#1D4ED8', '#2563EB']}
+                colors={['#2E3647', '#1E293B']}
                 style={StyleSheet.absoluteFillObject}
             />
 
@@ -50,9 +50,11 @@ const SplashScreen = ({ onFinish }) => {
             <View style={[styles.circle, { bottom: -100, left: -100, width: 300, height: 300, opacity: 0.1 }]} />
 
             <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-                <View style={styles.logoBox}>
-                    <MaterialCommunityIcons name="crane" size={60} color="#fff" />
-                </View>
+                <Image 
+                    source={require('../../../assets/logo.webp')} 
+                    style={styles.splashLogo} 
+                    resizeMode="contain" 
+                />
                 <Text style={styles.brand}>KAAL<Text style={{ color: '#93C5FD' }}> ERP</Text></Text>
                 <View style={styles.line} />
                 <Text style={styles.tagline}>ADVANCED CONSTRUCTION MANAGEMENT</Text>
@@ -66,14 +68,12 @@ const SplashScreen = ({ onFinish }) => {
 };
 
 const styles = StyleSheet.create({
-    root: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E3A8A' },
+    root: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2E3647' },
     circle: { position: 'absolute', backgroundColor: '#fff', borderRadius: 999 },
     content: { alignItems: 'center' },
-    logoBox: {
-        width: 120, height: 120, borderRadius: 35,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+    splashLogo: {
+        width: 120,
+        height: 120,
         marginBottom: 20,
     },
     brand: { color: '#fff', fontSize: 36, fontWeight: '900', letterSpacing: 4 },

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SIZES, SPACING } from '../theme/theme';
+import { COLORS, SIZES, SPACING } from '../constants/theme';
 
 const IssueCard = ({ issue }) => {
     const getPriorityColor = () => {

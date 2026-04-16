@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { ProgressBar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SIZES, SPACING, SHADOWS } from '../theme/theme';
+import { COLORS, SIZES, SPACING, SHADOWS } from '../constants/theme';
 import StatusBadge from './StatusBadge';
 
 const ProjectCard = ({ project, onPress, onEdit, index = 0 }) => {
@@ -26,62 +26,92 @@ const ProjectCard = ({ project, onPress, onEdit, index = 0 }) => {
         ]).start();
     }, [index]);
 
-    const velocity = project.progress ? Math.round(project.progress * 100) : 0;
-    const velocityColor = velocity >= 75 ? COLORS.success : velocity >= 40 ? COLORS.primaryAccent : COLORS.warning;
+    const budgetFormatted = project.budget ? `$${(project.budget / 1000).toFixed(0)}k` : '$0';
+    const pmName = project.pmId?.fullName || project.projectManager || 'Unassigned';
+    const clientName = project.clientId?.fullName || project.client || 'General';
+    const velocity = project.progress || 0;
+
+    // Premium Color Palette mapping
+    const velocityColor = velocity > 75 ? '#10B981' : velocity > 40 ? '#F59E0B' : '#3B82F6';
+    const velocityBg = velocity > 75 ? '#ECFDF5' : velocity > 40 ? '#FFFBEB' : '#EFF6FF';
 
     return (
         <Animated.View style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, SHADOWS.small]}>
+            <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, SHADOWS.medium]}>
+                {/* 🏷️ TYPE CHIP */}
+                <View style={[styles.typeChip, { backgroundColor: velocityBg }]}>
+                    <Text style={[styles.typeText, { color: velocityColor }]}>{(project.type || 'Commercial').toUpperCase()}</Text>
+                </View>
+
                 <View style={styles.header}>
                     <View style={styles.titleSection}>
                         <Text style={styles.name} numberOfLines={1}>{project.name}</Text>
-                        <View style={styles.clientRow}>
-                            <MaterialCommunityIcons name="office-building-marker-outline" size={14} color={COLORS.textSecondary} />
-                            <Text style={styles.client} numberOfLines={1}>{project.client}</Text>
+                        <View style={styles.locationRow}>
+                            <MaterialCommunityIcons name="earth" size={12} color="#64748B" />
+                            <Text style={styles.locationText} numberOfLines={1}>{project.location?.address || 'Site Address TBD'}</Text>
                         </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                        <StatusBadge status={project.status || 'Active'} />
-                        {onEdit && (
-                            <TouchableOpacity onPress={(e) => { e.stopPropagation(); onEdit(project); }}>
-                                <MaterialCommunityIcons name="pencil" size={16} color={COLORS.primary} />
-                            </TouchableOpacity>
-                        )}
+                    <StatusBadge status={project.status || 'Planning'} />
+                </View>
+
+                {/* 👥 STAKEHOLDERS */}
+                <View style={styles.stakeholderSection}>
+                    <View style={styles.stakeholder}>
+                        <View style={styles.stakeholderIconBox}>
+                            <MaterialCommunityIcons name="account-tie" size={14} color={COLORS.primary} />
+                        </View>
+                        <View>
+                            <Text style={styles.sLabel}>PROJECT MANAGER</Text>
+                            <Text style={styles.sVal}>{pmName}</Text>
+                        </View>
+                    </View>
+                    <View style={styles.sDivider} />
+                    <View style={styles.stakeholder}>
+                        <View style={styles.stakeholderIconBox}>
+                            <MaterialCommunityIcons name="briefcase-variant-outline" size={14} color="#6366F1" />
+                        </View>
+                        <View>
+                            <Text style={styles.sLabel}>CLIENT / OWNER</Text>
+                            <Text style={styles.sVal}>{clientName}</Text>
+                        </View>
                     </View>
                 </View>
 
-                <View style={styles.progressSection}>
-                    <View style={styles.progressInfo}>
-                        <Text style={styles.progressLabel}>COMPLETION</Text>
-                        <Text style={[styles.progressVal, { color: velocityColor }]}>{velocity}%</Text>
+                {/* 📈 PROGRESS INSIGHTS */}
+                <View style={styles.progressContainer}>
+                    <View style={styles.progressHeader}>
+                        <Text style={styles.progressTitle}>COMPLETION PROGRESS</Text>
+                        <View style={[styles.progBadge, { backgroundColor: velocityColor }]}>
+                            <Text style={styles.progBadgeText}>{velocity}%</Text>
+                        </View>
                     </View>
-                    <ProgressBar progress={velocity / 100} color={velocityColor} style={styles.progressBar} />
+                    <ProgressBar progress={velocity / 100} color={velocityColor} style={styles.progressBarPremium} />
                 </View>
 
-                <View style={styles.footer}>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIcon, { backgroundColor: COLORS.badgeBlue + '15' }]}>
-                                <MaterialCommunityIcons name="calendar-check" size={14} color={COLORS.badgeBlue} />
-                            </View>
-                            <Text style={styles.statCount}>{project.stats?.tasks || 0}</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIcon, { backgroundColor: COLORS.badgeRed + '15' }]}>
-                                <MaterialCommunityIcons name="alert-circle-outline" size={14} color={COLORS.badgeRed} />
-                            </View>
-                            <Text style={styles.statCount}>{project.stats?.issues || 0}</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIcon, { backgroundColor: COLORS.badgeTeal + '15' }]}>
-                                <MaterialCommunityIcons name="account-group-outline" size={14} color={COLORS.badgeTeal} />
-                            </View>
-                            <Text style={styles.statCount}>{project.team?.length || 0}</Text>
-                        </View>
+                <View style={styles.footerPremium}>
+                    <View style={styles.fMetric}>
+                        <MaterialCommunityIcons name="currency-usd" size={14} color="#64748B" />
+                        <Text style={styles.fMetricVal}>{budgetFormatted}</Text>
+                        <Text style={styles.fMetricLabel}>BUDGET</Text>
                     </View>
-                    <View style={styles.arrowBox}>
-                        <MaterialCommunityIcons name="arrow-right" size={18} color={COLORS.primaryAccent} />
+                    <View style={styles.fDivider} />
+                    <View style={styles.fMetric}>
+                        <MaterialCommunityIcons name="calendar-range" size={14} color="#64748B" />
+                        <Text style={styles.fMetricVal}>Q1 2026</Text>
+                        <Text style={styles.fMetricLabel}>DEADLINE</Text>
                     </View>
+                </View>
+
+                <View style={styles.actionRowPremium}>
+                    {onEdit && (
+                        <TouchableOpacity style={styles.secondaryBtn} onPress={(e) => { e.stopPropagation(); onEdit(project); }}>
+                            <MaterialCommunityIcons name="pencil" size={16} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={styles.primaryBtn}>
+                        <Text style={styles.primaryBtnText}>VIEW CONSTRUCTION JOBS</Text>
+                        <MaterialCommunityIcons name="arrow-right" size={16} color="#fff" />
+                    </TouchableOpacity>
                 </View>
             </TouchableOpacity>
         </Animated.View>
@@ -90,101 +120,186 @@ const ProjectCard = ({ project, onPress, onEdit, index = 0 }) => {
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: COLORS.card,
-        borderRadius: SIZES.radius,
-        padding: SPACING.m,
-        marginBottom: SPACING.m,
+        backgroundColor: '#fff',
+        borderRadius: 28,
+        padding: 24,
+        marginBottom: 20,
+        marginHorizontal: 16,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: '#F1F5F9',
+    },
+    typeChip: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    typeText: {
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 0.5,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: SPACING.m,
+        marginBottom: 20,
     },
     titleSection: {
         flex: 1,
         marginRight: 10,
     },
     name: {
-        fontSize: 18,
+        fontSize: 22,
         fontWeight: '900',
-        color: COLORS.textPrimary,
-        letterSpacing: -0.4,
+        color: '#0F172A',
+        letterSpacing: -0.5,
     },
-    clientRow: {
+    locationRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 6,
+        gap: 4,
     },
-    client: {
+    locationText: {
         fontSize: 12,
-        color: COLORS.textSecondary,
-        marginLeft: 4,
+        color: '#64748B',
         fontWeight: '600',
     },
-    progressSection: {
-        marginBottom: SPACING.m,
-    },
-    progressInfo: {
+    stakeholderSection: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        padding: 16,
+        borderRadius: 20,
+        marginBottom: 20,
         alignItems: 'center',
-        marginBottom: 8,
     },
-    progressLabel: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: COLORS.textMuted,
-        letterSpacing: 0.5,
-    },
-    progressVal: {
-        fontSize: 12,
-        fontWeight: '900',
-    },
-    progressBar: {
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: COLORS.border,
-    },
-    footer: {
+    stakeholder: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: SPACING.m,
-        borderTopWidth: 1,
-        borderTopColor: COLORS.border + '50',
+        gap: 10,
     },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    statItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    statIcon: {
-        width: 24,
-        height: 24,
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    statCount: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: COLORS.textPrimary,
-    },
-    arrowBox: {
+    stakeholderIconBox: {
         width: 32,
         height: 32,
         borderRadius: 10,
-        backgroundColor: COLORS.background,
+        backgroundColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    sLabel: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: COLORS.textMuted,
+        letterSpacing: 0.5,
+    },
+    sVal: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#1E293B',
+        marginTop: 1,
+    },
+    sDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#E2E8F0',
+        marginHorizontal: 12,
+    },
+    progressContainer: {
+        marginBottom: 24,
+    },
+    progressHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    progressTitle: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#64748B',
+        letterSpacing: 1,
+    },
+    progBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    progBadgeText: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#fff',
+    },
+    progressBarPremium: {
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#F1F5F9',
+    },
+    footerPremium: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        marginBottom: 20,
+    },
+    fMetric: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    fMetricVal: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginTop: 2,
+    },
+    fMetricLabel: {
+        fontSize: 8,
+        fontWeight: '800',
+        color: '#94A3B8',
+        letterSpacing: 0.5,
+        marginTop: 2,
+    },
+    fDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: '#F1F5F9',
+    },
+    actionRowPremium: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    secondaryBtn: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    primaryBtn: {
+        flex: 1,
+        height: 48,
+        borderRadius: 16,
+        backgroundColor: '#2563EB',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+    },
+    primaryBtnText: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#fff',
+        letterSpacing: 0.5,
     },
 });
 

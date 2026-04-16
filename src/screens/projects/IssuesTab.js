@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Modal, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, SIZES } from '../../theme/theme';
+import { COLORS, SPACING, SIZES } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import IssueCard from '../../components/IssueCard';
 import CustomInput from '../../components/CustomInput';

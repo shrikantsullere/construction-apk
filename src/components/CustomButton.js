@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Animated } from 'react-native';
-import { COLORS, SIZES } from '../theme/theme';
+import { COLORS, SIZES } from '../constants/theme';
 
 const CustomButton = ({ title, onPress, type = 'primary', loading = false, style, disabled = false }) => {
     const scaleAnim = useRef(new Animated.Value(1)).current;

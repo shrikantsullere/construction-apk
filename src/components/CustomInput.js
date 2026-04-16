@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TextInput, Text, StyleSheet, Platform } from 'react-native';
-import { COLORS, SIZES, SPACING } from '../theme/theme';
+import { COLORS, SIZES, SPACING } from '../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const CustomInput = ({ label, placeholder, value, onChangeText, secureTextEntry, error, icon, keyboardType, autoCapitalize }) => {
