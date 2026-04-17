@@ -40,7 +40,7 @@ const getJobs = async (req, res) => {
                 { createdBy: userId },
                 { foremanId: userId }
             ];
-        } else if (['FOREMAN', 'WORKER'].includes(role)) {
+        } else if (['FOREMAN', 'WORKER', 'SUBCONTRACTOR'].includes(role)) {
             const JobTask = require('../models/JobTask');
             const userTasks = await JobTask.find({
                 $or: [{ assignedTo: userId }, { assignedForeman: userId }]

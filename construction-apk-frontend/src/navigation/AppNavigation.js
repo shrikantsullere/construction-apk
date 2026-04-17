@@ -113,6 +113,9 @@ import ClientProjectsScreen from '../screens/client/ClientProjectsScreen';
 // Subcontractor Specific Screens
 import SubcontractorDashboardScreen from '../screens/subcontractor/SubcontractorDashboardScreen';
 import SubcontractorProjectsScreen from '../screens/subcontractor/SubcontractorProjectsScreen';
+import SubcontractorTasksScreen from '../screens/subcontractor/SubcontractorTasksScreen';
+import SubcontractorJobDetailsScreen from '../screens/subcontractor/SubcontractorJobDetailsScreen';
+import SubcontractorRFIScreen from '../screens/subcontractor/SubcontractorRFIScreen';
 
 // PM Specific Screens
 import ProjectManagerDashboardScreen from '../screens/project-manager/ProjectManagerDashboardScreen';
@@ -122,6 +125,7 @@ import ProjectManagerDrawingsScreen from '../screens/project-manager/ProjectMana
 import ProjectManagerPhotosScreen from '../screens/project-manager/ProjectManagerPhotosScreen';
 import PMCrewControlScreen from '../screens/project-manager/PMCrewControlScreen';
 import PMProjectDetailScreen from '../screens/project-manager/PMProjectDetailScreen';
+import ClientProgressScreen from '../screens/client/ClientProgressScreen';
 
 
 
@@ -137,6 +141,14 @@ const ProjectsStack = () => (
     </ProjectStack.Navigator>
 );
 
+// Subcontractor Projects Stack
+const SubcontractorProjectsStack = () => (
+    <ProjectStack.Navigator screenOptions={{ headerShown: false }}>
+        <ProjectStack.Screen name="ProjectsList" component={SubcontractorProjectsScreen} />
+        <ProjectStack.Screen name="ProjectDetails" component={ProjectDetailsScreen} />
+        <ProjectStack.Screen name="SubcontractorJobDetails" component={SubcontractorJobDetailsScreen} />
+    </ProjectStack.Navigator>
+);
 // Worker Dedicated Tabs
 const WorkerTabs = () => {
     const insets = useSafeAreaInsets();
@@ -831,8 +843,8 @@ const SubcontractorTabs = () => {
                 }}
             />
             <Tab.Screen
-                name="Jobs"
-                component={SubcontractorProjectsScreen}
+                name="Projects"
+                component={SubcontractorProjectsStack}
                 options={{
                     tabBarLabel: 'Projects',
                     tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "briefcase-check" : "briefcase-check-outline"} color={color} size={24} />
@@ -840,7 +852,7 @@ const SubcontractorTabs = () => {
             />
             <Tab.Screen
                 name="Tasks"
-                component={WorkerTasksScreen}
+                component={SubcontractorTasksScreen}
                 options={{
                     tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
                 }}
@@ -854,7 +866,7 @@ const SubcontractorTabs = () => {
             />
             <Tab.Screen
                 name="RFI"
-                component={RFIScreen}
+                component={SubcontractorRFIScreen}
                 options={{
                     tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "file-document-alert" : "file-document-alert-outline"} color={color} size={24} />
                 }}
@@ -880,7 +892,7 @@ const SubcontractorDrawer = () => {
             <Drawer.Screen name="MainTabs" component={SubcontractorTabs} />
             <Drawer.Screen name="Chatboard" component={WorkerChatboard} />
             <Drawer.Screen name="Equipment" component={EquipmentScreen} />
-            <Drawer.Screen name="RFI" component={RFIScreen} />
+            <Drawer.Screen name="RFI" component={SubcontractorRFIScreen} />
             <Drawer.Screen name="Reports" component={ReportsScreen} />
             <Drawer.Screen name="PurchaseOrders" component={PurchaseOrdersScreen} />
         </Drawer.Navigator>
@@ -1029,6 +1041,8 @@ const AppNavigation = () => {
                 ) : (
                     <>
                         <Stack.Screen name="Main" component={MainTabs} />
+                        <Stack.Screen name="ClientProgress" component={ClientProgressScreen} />
+                        <Stack.Screen name="ProjectDetails" component={ProjectDetailsScreen} />
                         <Stack.Screen name="Equipment" component={EquipmentScreen} />
                         <Stack.Screen name="PurchaseOrders" component={PurchaseOrdersScreen} />
                         <Stack.Screen name="Invoices" component={ClientInvoicesScreen} />

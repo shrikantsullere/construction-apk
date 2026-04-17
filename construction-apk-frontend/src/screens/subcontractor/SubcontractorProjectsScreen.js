@@ -1,214 +1,243 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Dimensions, ScrollView, SafeAreaView, StatusBar, Image } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { 
+    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+    TextInput, ScrollView, StatusBar, ActivityIndicator 
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SHADOWS, SPACING, SIZES } from '../../constants/theme';
-import WorkerHeader from '../../components/WorkerHeader';
 import { useApp } from '../../context/AppContext';
-import { LinearGradient } from 'expo-linear-gradient';
-import { getServerUrl } from '../../utils/api';
-
-const { width } = Dimensions.get('window');
+import { COLORS, SHADOWS } from '../../constants/theme';
+import WorkerHeader from '../../components/WorkerHeader';
 
 const SubcontractorProjectsScreen = ({ navigation }) => {
-    const { projects, refreshData, loading } = useApp();
-    const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All');
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const { jobs, loading, refreshData } = useApp();
+    const [searchQuery, setSearchQuery] = useState('');
+    const [activeFilter, setActiveFilter] = useState('PLANNING');
 
-    const getProjectImageUri = (project) => {
-        const raw = project?.image;
-        if (!raw) return null;
-        if (typeof raw !== 'string') return null;
-        if (raw.startsWith('data:image/')) return raw; // base64 data URL
-        return getServerUrl(raw); // absolute URL or server-relative path
-    };
+    const filters = ['PLANNING', 'ACTIVE', 'ON HOLD', 'COMPLETE'];
 
-    const onRefresh = useCallback(async () => {
-        setIsRefreshing(true);
-        await refreshData();
-        setIsRefreshing(false);
-    }, []);
-
-    const activeSitesCount = (projects || []).filter(p => p.status?.toLowerCase() === 'live site' || p.status?.toLowerCase() === 'active').length;
-    const planningSitesCount = (projects || []).filter(p => p.status?.toLowerCase() === 'planning' || p.status?.toLowerCase() === 'pre-construction').length;
-
-    const filteredProjects = (projects || []).filter(p => {
-        const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase()) ||
-            p.client?.toLowerCase().includes(search.toLowerCase());
-        const matchesStatus = statusFilter === 'All' || p.status?.toLowerCase() === statusFilter.toLowerCase();
-        return matchesSearch && matchesStatus;
-    });
-
-    const getStatusColor = (status) => {
-        switch ((status || '').toLowerCase()) {
-            case 'live site':
-            case 'active':
-                return '#10B981';
-            case 'planning':
-            case 'pre-construction':
-                return '#F59E0B';
-            default:
-                return '#64748B';
-        }
-    };
+    const filteredJobs = useMemo(() => {
+        return (jobs || []).filter(j => {
+            const matchesSearch = j.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                (j.projectId?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+            
+            const normalizedStatus = (j.status || 'planning').toUpperCase().replace('_', ' ');
+            const matchesFilter = activeFilter === 'ALL' || normalizedStatus === activeFilter;
+            
+            return matchesSearch && matchesFilter;
+        });
+    }, [jobs, searchQuery, activeFilter]);
 
     const renderProjectCard = ({ item }) => (
-        <TouchableOpacity
-            activeOpacity={0.92}
-            onPress={() => navigation.navigate('Jobs', { projectId: item._id })}
-            style={[styles.projectCard, SHADOWS.medium]}
-        >
-            <View style={styles.cardVisual}>
-                <Image
-                    source={{
-                        uri:
-                            getProjectImageUri(item) ||
-                            'https://images.unsplash.com/photo-1541888946425-d81bb19480c5?q=80&w=2070&auto=format&fit=crop',
-                    }}
-                    style={styles.cardImage}
-                    resizeMode="cover"
-                />
-                <LinearGradient
-                    colors={['rgba(15, 23, 42, 0.05)', 'rgba(15, 23, 42, 0.80)']}
-                    style={styles.cardGradient}
-                />
-            </View>
-
+        <View style={[styles.jobCard, SHADOWS.medium]}>
             <View style={styles.cardHeader}>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                    <Text style={styles.statusBadgeText}>{item.status || 'PLANNING'}</Text>
+                <View style={styles.iconContainer}>
+                    <View style={styles.blueCircle}>
+                        <MaterialCommunityIcons name="briefcase-outline" size={20} color="#2563EB" />
+                    </View>
                 </View>
-                <TouchableOpacity onPress={() => navigation.navigate('Jobs', { projectId: item._id })}>
-                    <Text style={styles.viewJobsLink}>View Jobs</Text>
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.cardInfo}>
-                <Text style={styles.locationSmall}>{item.location?.address || 'Location TBD'}</Text>
-                <Text style={styles.projectName}>{item.name}</Text>
-                <Text style={styles.pmText}>PM: {item.pmId?.fullName || 'Unassigned'}</Text>
-            </View>
-
-            <View style={styles.progressContainer}>
-                <View style={styles.progressLabelRow}>
-                    <Text style={styles.progressLabel}>Progress</Text>
-                    <Text style={styles.progressPercent}>{item.progress || 0}%</Text>
-                </View>
-                <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBarFill, { width: `${item.progress || 0}%`, backgroundColor: getStatusColor(item.status) }]} />
+                <View style={styles.statusSection}>
+                    <Text style={styles.manageLabel}>MANAGE STATUS</Text>
+                    <View style={styles.statusBadge}>
+                        <Text style={styles.statusBadgeText}>{(item.status || 'PLANNING').toUpperCase()}</Text>
+                    </View>
                 </View>
             </View>
 
-            <View style={styles.clientSection}>
-                <Text style={styles.clientLabel}>Client</Text>
-                <Text style={styles.clientName}>{item.client || 'General'}</Text>
+            <View style={styles.cardBody}>
+                <Text style={styles.jobTitle}>{item.name}</Text>
+                <View style={styles.locationContainer}>
+                    <MaterialCommunityIcons name="map-marker-outline" size={14} color="#64748B" />
+                    <Text style={styles.locationText}>{item.projectId?.name || 'Main Site'}</Text>
+                </View>
+
+                <View style={styles.progressSection}>
+                    <View style={styles.progressLabelRow}>
+                        <Text style={styles.progressLabel}>PROGRESS</Text>
+                        <Text style={styles.progressPercent}>{item.progress || 0}%</Text>
+                    </View>
+                    <View style={styles.progressBarBg}>
+                        <View style={[styles.progressBarFill, { width: `${item.progress || 0}%` }]} />
+                    </View>
+                </View>
             </View>
 
-            <View style={styles.cardActions}>
-                <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => navigation.navigate('Drawings', { projectId: item._id })}
-                >
-                    <MaterialCommunityIcons name="floor-plan" size={18} color="#2563EB" />
-                    <Text style={styles.actionBtnText}>Drawings</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.actionBtn, styles.actionBtnPrimary]}
-                    onPress={() => navigation.navigate('Jobs', { projectId: item._id })}
-                >
-                    <Text style={styles.actionBtnTextPrimary}>View Jobs</Text>
-                </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
+            <TouchableOpacity 
+                style={styles.viewTasksBtn}
+                onPress={() => navigation.navigate('SubcontractorJobDetails', { job: item })}
+            >
+                <MaterialCommunityIcons name="check-circle-outline" size={18} color="#fff" />
+                <Text style={styles.viewTasksBtnText}>VIEW TASKS</Text>
+            </TouchableOpacity>
+        </View>
     );
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar barStyle="dark-content" />
-            <WorkerHeader title="Projects" />
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <WorkerHeader title="Projects" navigation={navigation} />
 
-            <View style={styles.container}>
-                <View style={styles.emptyContainer}>
-                    <MaterialCommunityIcons name="briefcase-outline" size={80} color="#E2E8F0" />
-                    <Text style={styles.emptyTitle}>Subcontractor Projects</Text>
-                    <Text style={styles.emptySubtitle}>Content is being updated by the Project Manager.</Text>
+            {/* Sub-Header matching Web Screenshot */}
+            <View style={styles.headerContent}>
+                <Text style={styles.titleText}>My Job Assignments</Text>
+                <View style={styles.subtitleRow}>
+                    <MaterialCommunityIcons name="web" size={14} color="#2563EB" />
+                    <Text style={styles.subtitleText}>VIEW YOUR ASSIGNED JOBS AND THEIR TASKS</Text>
                 </View>
             </View>
-        </SafeAreaView>
+
+            {/* Filters matching Web Screenshot - Fixed on one screen */}
+            <View style={styles.filterContainer}>
+                <View style={styles.filterRow}>
+                    {filters.map(f => (
+                        <TouchableOpacity 
+                            key={f} 
+                            onPress={() => setActiveFilter(f)}
+                            style={[
+                                styles.filterTab, 
+                                activeFilter === f && styles.filterTabActive
+                            ]}
+                        >
+                            <Text style={[
+                                styles.filterTabText, 
+                                activeFilter === f && styles.filterTabTextActive
+                            ]}>
+                                {f}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
+
+            {/* Search Bar matching Web Screenshot */}
+            <View style={styles.searchWrapper}>
+                <View style={styles.searchContainer}>
+                    <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search objectives..."
+                        placeholderTextColor="#94A3B8"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                </View>
+            </View>
+
+            <FlatList
+                data={filteredJobs}
+                keyExtractor={item => item._id || item.id}
+                renderItem={renderProjectCard}
+                contentContainerStyle={styles.listContainer}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                    loading ? (
+                        <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 40 }} />
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <MaterialCommunityIcons name="clipboard-text-off-outline" size={60} color="#E2E8F0" />
+                            <Text style={styles.emptyText}>No matching assignments found.</Text>
+                        </View>
+                    )
+                }
+                onRefresh={refreshData}
+                refreshing={loading}
+            />
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: '#fff' },
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    listContent: { paddingBottom: 100 },
-    headerContent: { paddingHorizontal: 20, paddingTop: 20 },
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
+    
+    // Header
+    headerContent: { paddingHorizontal: 20, paddingTop: 10, marginBottom: 15 },
+    titleText: { fontSize: 28, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    subtitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
+    subtitleText: { fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.5 },
 
-    pageTitle: { fontSize: 32, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
-    pageSubtitle: { fontSize: 13, color: '#64748B', fontWeight: '700', marginTop: 4, marginBottom: 24 },
+    // Filters
+    filterContainer: { backgroundColor: '#F8FAFC', paddingVertical: 8, marginHorizontal: 20, borderRadius: 16, marginBottom: 15 },
+    filterRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+    filterTab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+    filterTabActive: { backgroundColor: '#FF6B00' },
+    filterTabText: { fontSize: 9, fontWeight: '900', color: '#64748B' },
+    filterTabTextActive: { color: '#FFFFFF' },
 
-    statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    statBox: { flex: 1, backgroundColor: '#fff', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
-    statValue: { fontSize: 24, fontWeight: '900', color: '#0F172A' },
-    statLabel: { fontSize: 13, fontWeight: '900', color: '#0F172A', marginTop: 4 },
-    statSub: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 2 },
-
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 16,
+    // Search
+    searchWrapper: { paddingHorizontal: 20, marginBottom: 20 },
+    searchContainer: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#F8FAFC', 
+        borderWidth: 1, 
+        borderColor: '#E2E8F0', 
+        borderRadius: 14, 
         paddingHorizontal: 16,
-        height: 52,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        marginBottom: 16
+        height: 50
     },
-    searchInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#1E293B' },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#0F172A' },
 
-    filterRow: { flexDirection: 'row', marginBottom: 24 },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E2E8F0', marginRight: 8 },
-    filterChipActive: { backgroundColor: '#0F172A' },
-    filterText: { fontSize: 12, fontWeight: '900', color: '#64748B' },
-    filterTextActive: { color: '#fff' },
+    // List
+    listContainer: { paddingHorizontal: 20, paddingBottom: 100 },
 
-    projectCard: { backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', marginHorizontal: 20, marginBottom: 20, borderWidth: 1, borderColor: '#F1F5F9' },
-    cardVisual: { height: 140, position: 'relative' },
-    cardImage: { width: '100%', height: '100%' },
-    cardGradient: { ...StyleSheet.absoluteFillObject },
+    // Card UI matching Screenshot
+    jobCard: { 
+        backgroundColor: '#FFFFFF', 
+        borderRadius: 30, 
+        padding: 24, 
+        marginBottom: 20, 
+        borderWidth: 1, 
+        borderColor: '#F1F5F9' 
+    },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    iconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...SHADOWS.small
+    },
+    blueCircle: { 
+        width: 32, 
+        height: 32, 
+        borderRadius: 16, 
+        backgroundColor: '#EFF6FF', 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
+    statusSection: { alignItems: 'flex-end' },
+    manageLabel: { fontSize: 9, fontWeight: '800', color: '#94A3B8', marginBottom: 4 },
+    statusBadge: { backgroundColor: '#0F172A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+    statusBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
 
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, marginBottom: 12 },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-    statusBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-    viewJobsLink: { fontSize: 12, fontWeight: '900', color: '#2563EB' },
+    cardBody: { marginTop: 15 },
+    jobTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginBottom: 6 },
+    locationContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 15 },
+    locationText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
 
-    cardInfo: { paddingHorizontal: 20, marginBottom: 16 },
-    locationSmall: { fontSize: 11, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
-    projectName: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginTop: 2 },
-    pmText: { fontSize: 12, fontWeight: '800', color: '#64748B', marginTop: 4 },
+    progressSection: { marginBottom: 25 },
+    progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    progressLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8' },
+    progressPercent: { fontSize: 10, fontWeight: '900', color: '#0F172A' },
+    progressBarBg: { height: 4, backgroundColor: '#F1F5F9', borderRadius: 2, overflow: 'hidden' },
+    progressBarFill: { height: '100%', backgroundColor: '#2563EB', borderRadius: 2 },
 
-    progressContainer: { paddingHorizontal: 20, marginBottom: 16 },
-    progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    progressLabel: { fontSize: 12, fontWeight: '900', color: '#0F172A' },
-    progressPercent: { fontSize: 12, fontWeight: '900', color: '#0F172A' },
-    progressBarBg: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
-    progressBarFill: { height: '100%', borderRadius: 4 },
+    viewTasksBtn: { 
+        backgroundColor: '#2563EB', 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: 52, 
+        borderRadius: 14, 
+        gap: 8 
+    },
+    viewTasksBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
 
-    clientSection: { paddingHorizontal: 20, marginBottom: 20 },
-    clientLabel: { fontSize: 10, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1 },
-    clientName: { fontSize: 14, fontWeight: '800', color: '#0F172A', marginTop: 2 },
-
-    cardActions: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingBottom: 18 },
-    actionBtn: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-    actionBtnPrimary: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-    actionBtnText: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
-    actionBtnTextPrimary: { fontSize: 13, fontWeight: '800', color: '#fff' },
-
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 100 },
-    emptyTitle: { fontSize: 24, fontWeight: '900', color: '#1E293B', marginTop: 16 },
-    emptySubtitle: { fontSize: 14, fontWeight: '600', color: '#94A3B8', textAlign: 'center', marginTop: 8 },
-    emptyState: { alignItems: 'center', marginTop: 40 },
-    emptyText: { fontSize: 15, fontWeight: '800', color: '#94A3B8', marginTop: 12 }
+    emptyState: { alignItems: 'center', paddingVertical: 60 },
+    emptyText: { marginTop: 16, fontSize: 14, color: '#94A3B8', fontWeight: '700' }
 });
 
 export default SubcontractorProjectsScreen;

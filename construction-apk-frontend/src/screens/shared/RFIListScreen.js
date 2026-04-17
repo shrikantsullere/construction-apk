@@ -204,7 +204,7 @@ const RFIListScreen = ({ navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
-            <WorkerHeader title="All RFIs" showBranding={true} />
+            <WorkerHeader title="All RFIs" showBranding={true} showBack={true} />
 
             {/* Header */}
             <View style={styles.pageHeader}>
@@ -213,9 +213,6 @@ const RFIListScreen = ({ navigation }) => {
                     <Text style={styles.pageSubtitle}>Filter, search and manage all requests</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                        <MaterialCommunityIcons name="arrow-left" size={18} color="#64748B" />
-                    </TouchableOpacity>
                     {canManage && (
                         <TouchableOpacity style={styles.newBtn} onPress={() => setShowCreateModal(true)}>
                             <MaterialCommunityIcons name="plus" size={18} color="#fff" />

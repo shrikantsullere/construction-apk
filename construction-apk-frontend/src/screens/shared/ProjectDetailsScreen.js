@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { COLORS } from '../../constants/theme';
 import AppHeader from '../../components/AppHeader';
@@ -15,18 +15,29 @@ const Tab = createMaterialTopTabNavigator();
 import { useApp } from '../../context/AppContext';
 
 const ProjectDetailsScreen = ({ route, navigation }) => {
-    const { project } = route.params;
-    const { user, refreshData } = useApp();
-    const isWorker = user?.role === 'WORKER';
+    const { params } = route;
+    const { projects, refreshData } = useApp();
+    
+    // Support both direct object pass or ID pass
+    const project = params?.project || projects?.find(p => p._id === params?.projectId);
 
     React.useEffect(() => {
         refreshData();
     }, []);
 
+    if (!project) {
+        return (
+            <View style={styles.container}>
+                <AppHeader title="Project Details" showBack onBack={() => navigation.goBack()} />
+                <View style={styles.center}><Text>Project not found.</Text></View>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <AppHeader
-                title={project.name}
+                title={project.name || 'Project Details'}
                 showBack
                 onBack={() => navigation.goBack()}
                 rightIcon="dots-vertical"
@@ -38,8 +49,8 @@ const ProjectDetailsScreen = ({ route, navigation }) => {
                     tabBarInactiveTintColor: COLORS.textSecondary,
                     tabBarIndicatorStyle: { backgroundColor: COLORS.primary, height: 3 },
                     tabBarStyle: { backgroundColor: COLORS.background },
-                    tabBarItemStyle: { width: 100 },
-                    tabBarLabelStyle: { fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+                    tabBarItemStyle: { width: 'auto', minWidth: 90 },
+                    tabBarLabelStyle: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
                 }}
             >
                 <Tab.Screen name="Overview">
@@ -66,6 +77,11 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 

@@ -137,50 +137,128 @@ const getRoomMessages = async (req, res, next) => {
 // @access  Private
 const sendMessage = async (req, res, next) => {
     try {
-        const { roomId, message, attachments } = req.body;
-        const { _id, companyId } = req.user;
+        let { roomId, message, attachments, projectId } = req.body;
+        const { _id, companyId, role } = req.user;
 
-        // Verify participation
-        const participant = await ChatParticipant.findOne({ roomId, userId: _id });
-        if (!participant) {
-            res.status(403);
-            return next(new Error('You are not authorized to send messages to this room'));
+        if (!roomId && !projectId) {
+            res.status(400);
+            return next(new Error('Destination Room ID or Project ID is required'));
         }
 
+        // 1. SMART RESOLUTION: If roomId looks like a Project ID, resolve it
+        if (roomId && !projectId && mongoose.Types.ObjectId.isValid(roomId)) {
+            const projectExists = await Project.exists({ _id: roomId });
+            if (projectExists) {
+                projectId = roomId;
+            }
+        }
+
+        // 2. FIND OR RESOLVE ROOM
+        let actualRoomId = roomId;
+        if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+            const room = await ChatRoom.findOne({ projectId, roomType: 'PROJECT_GROUP' });
+            if (room) {
+                actualRoomId = room._id;
+            } else if (!roomId) {
+                res.status(404);
+                return next(new Error('Project chat room not found'));
+            }
+        }
+
+        if (!actualRoomId || !mongoose.Types.ObjectId.isValid(actualRoomId)) {
+            res.status(400);
+            return next(new Error('Valid Room ID is required'));
+        }
+
+        // 3. AUTHORIZATION CHECK (Polymorphic)
+        let isAuthorized = false;
+        
+        // A. Check explicit participation
+        let participant = await ChatParticipant.findOne({ roomId: actualRoomId, userId: _id });
+        if (participant) {
+            isAuthorized = true;
+        } else if (projectId) {
+            // B. Check dynamic assignment (Fallback for Subs/Workers not yet synced)
+            const project = await Project.findById(projectId);
+            if (project) {
+                const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
+                const isPM = project.pmId?.toString() === _id.toString();
+                const isClient = project.clientId?.toString() === _id.toString();
+                
+                if (isAdmin || isPM || isClient) {
+                    isAuthorized = true;
+                } else {
+                    // Check if assigned via tasks or jobs
+                    const [Task, Job] = [require('../models/Task'), require('../models/Job')];
+                    const taskAssigned = await Task.exists({ projectId, assignedTo: _id });
+                    if (taskAssigned) {
+                        isAuthorized = true;
+                    } else {
+                        const jobAssigned = await Job.exists({ projectId, $or: [{ foremanId: _id }, { assignedWorkers: _id }] });
+                        if (jobAssigned) isAuthorized = true;
+                    }
+                }
+
+                // AUTO-JOIN: If authorized but not a participant, add them now
+                if (isAuthorized) {
+                    try {
+                        participant = await ChatParticipant.create({
+                            roomId: actualRoomId,
+                            userId: _id,
+                            companyId,
+                            roleAtJoining: role,
+                            lastReadAt: new Date()
+                        });
+                        console.log(`[Auto-Join] User ${_id} added as participant to room ${actualRoomId}`);
+                    } catch (syncErr) {
+                        console.error('[Auto-Join Error]', syncErr);
+                    }
+                }
+            }
+        }
+
+        if (!isAuthorized) {
+            console.error(`[Chat Auth Failure] User ${_id} (${role}) unauthorized for room ${actualRoomId}`);
+            res.status(403);
+            return next(new Error('You are not authorized to send messages to this room. Please contact your manager.'));
+        }
+
+        // 4. CREATE MESSAGE
         const chat = await Chat.create({
             companyId,
             sender: _id,
-            roomId,
+            roomId: actualRoomId,
+            projectId: projectId || null,
             message,
             attachments
         });
 
         const fullChat = await Chat.findById(chat._id).populate('sender', 'fullName role avatar');
 
-        // Update sender's lastReadAt
-        participant.lastReadAt = new Date();
-        await participant.save();
-
-        // Emit to room IMMEDIATELY for responsiveness
-        const io = req.app.get('io');
-        if (io) {
-            io.to(roomId.toString()).emit('new_message', fullChat);
+        // Update sender's lastReadAt if they are a participant
+        if (participant) {
+            participant.lastReadAt = new Date();
+            await participant.save();
         }
 
-        // Notify participants who/what room has a new message (Background)
-        const notifyOthers = async () => {
-            const allParticipants = await ChatParticipant.find({ roomId, userId: { $ne: _id } });
-            allParticipants.forEach(p => {
-                const targetUid = p.userId.toString();
-                io.to(targetUid).emit('new_notification', {
-                    type: 'chat',
-                    roomId,
-                    senderName: req.user.fullName
+        // 5. REAL-TIME EMISSION
+        const io = req.app.get('io');
+        if (io) {
+            io.to(actualRoomId.toString()).emit('new_message', fullChat);
+            
+            // Background notifications
+            const notifyOthers = async () => {
+                const others = await ChatParticipant.find({ roomId: actualRoomId, userId: { $ne: _id } });
+                others.forEach(p => {
+                    io.to(p.userId.toString()).emit('new_notification', {
+                        type: 'chat',
+                        roomId: actualRoomId,
+                        senderName: req.user.fullName
+                    });
                 });
-            });
-        };
-
-        if (io) notifyOthers().catch(err => console.error('Notification sync error:', err));
+            };
+            notifyOthers().catch(err => console.error('Notification error:', err));
+        }
 
         res.status(201).json(fullChat);
     } catch (error) {

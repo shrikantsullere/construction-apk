@@ -82,12 +82,24 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                             <TouchableOpacity
                                 style={styles.menuBtn}
                                 onPress={() => {
-                                    // Robust drawer opening logic
-                                    const parent = navigation.getParent();
-                                    if (parent && parent.openDrawer) {
-                                        parent.openDrawer();
-                                    } else {
-                                        navigation.dispatch(DrawerActions.openDrawer());
+                                    try {
+                                        // Standard drawer opening attempt
+                                        if (typeof navigation.openDrawer === 'function') {
+                                            navigation.openDrawer();
+                                        } 
+                                        else if (typeof navigation.toggleDrawer === 'function') {
+                                            navigation.toggleDrawer();
+                                        }
+                                        else {
+                                            const parent = navigation.getParent();
+                                            if (parent && typeof parent.openDrawer === 'function') {
+                                                parent.openDrawer();
+                                            } else {
+                                                navigation.dispatch(DrawerActions.toggleDrawer());
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.warn('-- DRAWER OPEN FAILED --', e.message);
                                     }
                                 }}
                             >
@@ -302,11 +314,14 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                             onPress={() => {
                                 setIsSearching(false);
                                 setSearchQuery('');
-                                // Navigate to Jobs tab (Foreman's project list) inside MainTabs
+                                
+                                // Subcontractors and Clients use "Projects" tab; Workers and Foremen use "Jobs"
+                                const targetTab = (user?.role === 'SUBCONTRACTOR' || user?.role === 'CLIENT') ? 'Projects' : 'Jobs';
+                                
                                 try {
-                                    navigation.navigate('MainTabs', { screen: 'Jobs' });
+                                    navigation.navigate('MainTabs', { screen: targetTab });
                                 } catch (e) {
-                                    console.warn('Navigation to Jobs failed:', e.message);
+                                    console.warn(`Navigation to ${targetTab} failed:`, e.message);
                                 }
                             }}
                         >
