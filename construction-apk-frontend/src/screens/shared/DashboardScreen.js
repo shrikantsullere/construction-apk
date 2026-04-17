@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { marginTop: 12, fontSize: 13, fontWeight: '800', color: '#64748B' },
-    scroll: { padding: 16, paddingTop: 60 },
+    scroll: { padding: 16, paddingTop: 0 },
     bannerWrapper: { borderRadius: 28, overflow: 'hidden', marginBottom: 20 },
     banner: { padding: 24, paddingVertical: 32, flexDirection: 'row', alignItems: 'center', position: 'relative' },
     bannerInfo: { flex: 1, zIndex: 2 },

@@ -33,8 +33,8 @@ const SubcontractorProjectsScreen = ({ navigation }) => {
     const planningSitesCount = (projects || []).filter(p => p.status?.toLowerCase() === 'planning' || p.status?.toLowerCase() === 'pre-construction').length;
 
     const filteredProjects = (projects || []).filter(p => {
-        const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase()) || 
-                             p.client?.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase()) ||
+            p.client?.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = statusFilter === 'All' || p.status?.toLowerCase() === statusFilter.toLowerCase();
         return matchesSearch && matchesStatus;
     });
@@ -42,7 +42,7 @@ const SubcontractorProjectsScreen = ({ navigation }) => {
     const getStatusColor = (status) => {
         switch ((status || '').toLowerCase()) {
             case 'live site':
-            case 'active': 
+            case 'active':
                 return '#10B981';
             case 'planning':
             case 'pre-construction':
@@ -105,14 +105,14 @@ const SubcontractorProjectsScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.cardActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={() => navigation.navigate('Drawings', { projectId: item._id })}
                 >
                     <MaterialCommunityIcons name="floor-plan" size={18} color="#2563EB" />
                     <Text style={styles.actionBtnText}>Drawings</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnPrimary]}
                     onPress={() => navigation.navigate('Jobs', { projectId: item._id })}
                 >
@@ -126,7 +126,7 @@ const SubcontractorProjectsScreen = ({ navigation }) => {
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="dark-content" />
             <WorkerHeader title="Projects" />
-            
+
             <View style={styles.container}>
                 <View style={styles.emptyContainer}>
                     <MaterialCommunityIcons name="briefcase-outline" size={80} color="#E2E8F0" />
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
     listContent: { paddingBottom: 100 },
     headerContent: { paddingHorizontal: 20, paddingTop: 20 },
-    
+
     pageTitle: { fontSize: 32, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
     pageSubtitle: { fontSize: 13, color: '#64748B', fontWeight: '700', marginTop: 4, marginBottom: 24 },
 

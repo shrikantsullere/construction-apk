@@ -88,7 +88,7 @@ const ForemanJobsScreen = ({ navigation }) => {
                 </View>
 
                 {/* Actions */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.viewTasksBtn}
                     onPress={() => navigation.navigate('ForemanTasks', { projectId: item._id })}
                 >
@@ -108,7 +108,7 @@ const ForemanJobsScreen = ({ navigation }) => {
             <View style={styles.stickyHeader}>
                 <View style={styles.searchBar}>
                     <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
-                    <TextInput 
+                    <TextInput
                         style={styles.searchInput}
                         placeholder="Search projects..."
                         placeholderTextColor="#94A3B8"
@@ -117,13 +117,13 @@ const ForemanJobsScreen = ({ navigation }) => {
                     />
                 </View>
 
-                <ScrollView 
-                    horizontal 
+                <ScrollView
+                    horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.filterBar}
                 >
                     {['ALL', 'ACTIVE', 'PLANNING', 'ON HOLD', 'COMPLETE'].map(status => (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             key={status}
                             style={[styles.filterChip, activeStatus === status && styles.filterChipActive]}
                             onPress={() => setActiveStatus(status)}
@@ -186,13 +186,13 @@ const styles = StyleSheet.create({
     progressBarBg: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
     progressBarFill: { height: '100%', borderRadius: 4 },
 
-    viewTasksBtn: { 
-        height: 54, 
-        backgroundColor: '#2563EB', 
-        borderRadius: 16, 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
+    viewTasksBtn: {
+        height: 54,
+        backgroundColor: '#2563EB',
+        borderRadius: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
         gap: 12,
         elevation: 4,
         shadowColor: '#2563EB',

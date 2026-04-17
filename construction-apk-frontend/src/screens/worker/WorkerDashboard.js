@@ -168,7 +168,7 @@ const WorkerDashboard = ({ navigation, timer, isClockedIn, handleClockToggle, se
 };
 
 const styles = StyleSheet.create({
-    workerContainer: { flex: 1, padding: 14, paddingTop: 10 },
+    workerContainer: { flex: 1, padding: 14, paddingTop: 2 },
     workerSubtitle: { fontSize: Dimensions.get('window').width < 380 ? 28 : 32, fontWeight: '900', color: COLORS.primary, letterSpacing: -1, marginTop: 4, textTransform: 'uppercase' },
     modernClockCard: { backgroundColor: '#fff', borderRadius: 32, padding: 24, marginBottom: 24, overflow: 'hidden' },
     clockIconBg: { position: 'absolute', right: -40, top: -40, opacity: 0.5 },

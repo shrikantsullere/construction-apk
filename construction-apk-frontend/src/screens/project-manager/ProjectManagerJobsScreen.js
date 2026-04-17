@@ -51,8 +51,8 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
             `Are you sure you want to delete "${name}"? This action cannot be undone.`,
             [
                 { text: 'Cancel', style: 'cancel' },
-                { 
-                    text: 'Delete', 
+                {
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         try {
@@ -118,10 +118,10 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
                             <Text style={styles.tinyLoc} numberOfLines={1}>{item.location || 'Site'}</Text>
                         </View>
                     </View>
-                    
+
                     <View style={styles.metricInfo}>
                         <Text style={styles.tinyBudget}>${(Number(item.budget) || 0).toLocaleString()}</Text>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={[styles.tinyBadge, { backgroundColor: config.bg, borderColor: config.color + '20' }]}
                             onPress={() => navigation.navigate('PMProjectDetail', { projectId: item._id })}
                         >
@@ -135,7 +135,7 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
                         <Text style={styles.tinyClient}>{item.clientId?.fullName || 'No Client'}</Text>
                         <Text style={styles.tinyProgress}>{item.progress || 0}% Done</Text>
                     </View>
-                    
+
                     <View style={styles.miniActionStrip}>
                         <TouchableOpacity style={styles.miniBtn} onPress={() => navigation.navigate('Drawings', { projectId: item._id })}>
                             <MaterialCommunityIcons name="floor-plan" size={14} color="#10B981" />
@@ -163,7 +163,7 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
                 <View style={styles.headerTopRow}>
                     <View style={styles.ultraCompactSearchBox}>
                         <MaterialCommunityIcons name="magnify" size={16} color="#94A3B8" />
-                        <TextInput 
+                        <TextInput
                             style={styles.tinySearchInput}
                             placeholder="Search projects..."
                             placeholderTextColor="#94A3B8"
@@ -175,14 +175,14 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
 
                 {/* Filter Toolbar */}
                 <View style={styles.compactToolbar}>
-                    <FlatList 
+                    <FlatList
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         data={['ALL', 'ACTIVE', 'PRE-CON', 'HOLD', 'DONE']}
                         keyExtractor={i => i}
                         contentContainerStyle={styles.tinyFilterList}
                         renderItem={({ item }) => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.tinyFilterChip, activeStatus === item && styles.tinyFilterChipActive]}
                                 onPress={() => setActiveStatus(item)}
                             >
@@ -220,32 +220,32 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
 
                         <ScrollView style={styles.modalForm}>
                             <Text style={styles.inputLabel}>Project Name</Text>
-                            <TextInput 
-                                style={styles.modalInput} 
-                                value={editName} 
-                                onChangeText={setEditName} 
+                            <TextInput
+                                style={styles.modalInput}
+                                value={editName}
+                                onChangeText={setEditName}
                                 placeholder="Enter project name"
                             />
 
                             <Text style={styles.inputLabel}>Location</Text>
-                            <TextInput 
-                                style={styles.modalInput} 
-                                value={editLocation} 
-                                onChangeText={setEditLocation} 
+                            <TextInput
+                                style={styles.modalInput}
+                                value={editLocation}
+                                onChangeText={setEditLocation}
                                 placeholder="Enter location"
                             />
 
                             <Text style={styles.inputLabel}>Budget ($)</Text>
-                            <TextInput 
-                                style={styles.modalInput} 
-                                value={editBudget} 
-                                onChangeText={setEditBudget} 
+                            <TextInput
+                                style={styles.modalInput}
+                                value={editBudget}
+                                onChangeText={setEditBudget}
                                 placeholder="Enter budget"
                                 keyboardType="numeric"
                             />
 
-                            <TouchableOpacity 
-                                style={styles.saveBtn} 
+                            <TouchableOpacity
+                                style={styles.saveBtn}
                                 onPress={handleUpdate}
                                 disabled={isUpdating}
                             >
@@ -261,26 +261,26 @@ const ProjectManagerJobsScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    stickyHeader: { 
-        paddingHorizontal: 16, 
-        paddingTop: 8, 
+    stickyHeader: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
         paddingBottom: 8,
-        backgroundColor: '#fff', 
-        borderBottomWidth: 1, 
-        borderBottomColor: '#F1F5F9', 
-        zIndex: 10 
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        zIndex: 10
     },
     headerTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    ultraCompactSearchBox: { 
+    ultraCompactSearchBox: {
         flex: 1,
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        backgroundColor: '#F8FAFC', 
-        borderRadius: 10, 
-        height: 38, 
-        paddingHorizontal: 12, 
-        borderWidth: 1, 
-        borderColor: '#E2E8F0' 
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        height: 38,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     tinySearchInput: { flex: 1, marginLeft: 6, fontSize: 12, fontWeight: '600', color: '#1E293B' },
 
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     indicatorLine: { width: 3, height: 20, borderRadius: 2 },
     tinyName: { fontSize: 13, fontWeight: '900', color: '#1E293B' },
     tinyLoc: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
-    
+
     metricInfo: { alignItems: 'flex-end', gap: 2 },
     tinyBudget: { fontSize: 11, fontWeight: '900', color: '#10B981' },
     tinyBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },

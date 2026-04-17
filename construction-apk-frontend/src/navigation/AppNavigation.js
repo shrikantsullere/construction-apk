@@ -6,50 +6,55 @@ import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from '@rea
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient'; // Added for premium look
 import { COLORS } from '../constants/theme';
-import { View, Platform, ActivityIndicator, Text, TouchableOpacity, Image, Dimensions, useWindowDimensions } from 'react-native';
+import { View, Platform, ActivityIndicator, Text, TouchableOpacity, Image, Dimensions, useWindowDimensions, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 
 const { width, height } = Dimensions.get('window');
 const isSmallDevice = width < 380;
 
-// ── MODERN TAB BAR CONFIGURATION ──────────────────────────
-const MODERN_TAB_BAR_STYLE = {
-    backgroundColor: '#0F172A',
-    borderTopWidth: 0,
-    height: Platform.OS === 'ios' ? (height > 750 ? 82 : 68) : (isSmallDevice ? 60 : 65),
-    paddingBottom: Platform.OS === 'ios' ? (height > 750 ? 20 : 12) : (isSmallDevice ? 6 : 8),
-    paddingTop: 5,
-    elevation: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    position: 'absolute',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden'
-};
+const getModernTabOptions = (insets, isSmallDevice, windowHeight) => {
+    const bottomPadding = insets.bottom > 0 ? insets.bottom : (isSmallDevice ? 8 : 12);
+    const barHeight = Platform.OS === 'ios' 
+        ? (windowHeight > 750 ? 88 + (insets.bottom > 0 ? insets.bottom - 10 : 0) : 74) 
+        : (isSmallDevice ? 65 + insets.bottom : 70 + (insets.bottom > 0 ? insets.bottom : 12));
 
-const MODERN_TAB_SCREEN_OPTIONS = {
-    headerShown: false,
-    tabBarActiveTintColor: '#3B82F6', // Vibrant Sky Blue
-    tabBarInactiveTintColor: '#64748B', // Slate Muted
-    tabBarStyle: MODERN_TAB_BAR_STYLE,
-    tabBarLabelStyle: {
-        fontSize: isSmallDevice ? 8 : 10,
-        fontWeight: '900',
-        textTransform: 'uppercase',
-        letterSpacing: isSmallDevice ? 0.3 : 0.8,
-        marginTop: -4,
-        marginBottom: 4
-    },
-    tabBarHideOnKeyboard: true,
-    tabBarBackground: () => (
-        <LinearGradient
-            colors={['#1E293B', '#0F172A']}
-            style={{ flex: 1 }}
-        />
-    ),
+    return {
+        headerShown: false,
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#64748B',
+        tabBarStyle: {
+            backgroundColor: '#0F172A',
+            borderTopWidth: 0,
+            height: barHeight,
+            paddingBottom: bottomPadding,
+            paddingTop: 5,
+            elevation: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 15,
+            position: 'absolute',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            overflow: 'hidden'
+        },
+        tabBarLabelStyle: {
+            fontSize: isSmallDevice ? 8 : 10,
+            fontWeight: '900',
+            textTransform: 'uppercase',
+            letterSpacing: isSmallDevice ? 0.3 : 0.8,
+            marginTop: -4,
+            marginBottom: 4
+        },
+        tabBarHideOnKeyboard: true,
+        tabBarBackground: () => (
+            <LinearGradient
+                colors={['#1E293B', '#0F172A']}
+                style={{ flex: 1 }}
+            />
+        ),
+    };
 };
 
 // Auth Screens
@@ -133,69 +138,76 @@ const ProjectsStack = () => (
 );
 
 // Worker Dedicated Tabs
-const WorkerTabs = () => (
-    <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: '#0F172A' }}
-        screenOptions={MODERN_TAB_SCREEN_OPTIONS}
-    >
-        <Tab.Screen
-            name="Dashboard"
-            component={WorkerDashboardScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Jobs"
-            component={WorkerJobsScreen}
-            options={{
-                tabBarLabel: 'Jobs',
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "office-building" : "office-building-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Tasks"
-            component={WorkerTasksScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Drawings"
-            component={WorkerDrawingsScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Photos"
-            component={WorkerPhotosScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
-            }}
-        />
-    </Tab.Navigator>
-);
+const WorkerTabs = () => {
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+    return (
+        <Tab.Navigator
+            sceneContainerStyle={{ backgroundColor: '#0F172A' }}
+            screenOptions={getModernTabOptions(insets, isSmallDevice, windowHeight)}
+        >
+            <Tab.Screen
+                name="Dashboard"
+                component={WorkerDashboardScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Jobs"
+                component={WorkerJobsScreen}
+                options={{
+                    tabBarLabel: 'Jobs',
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "office-building" : "office-building-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Tasks"
+                component={WorkerTasksScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Drawings"
+                component={WorkerDrawingsScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Photos"
+                component={WorkerPhotosScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
+                }}
+            />
+        </Tab.Navigator>
+    );
+};
 
 // ── REUSABLE DRAWER COMPONENTS ──────────────────────────
-const DrawerHeader = ({ title, subtitle, color = '#2563EB', isWorker = false }) => (
-    <View style={{ 
-        padding: 16, 
-        paddingTop: Platform.OS === 'ios' ? 10 : 24,
-        borderBottomWidth: 1, 
-        borderBottomColor: '#F1F5F9', 
-        marginBottom: 8,
-        backgroundColor: '#fff' 
-    }}>
-        <Image 
-            source={require('../../assets/logo.webp')} 
-            style={{ width: 32, height: 32, marginBottom: 6 }} 
-            resizeMode="contain" 
-        />
-        <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>{title}</Text>
-        <Text style={{ fontSize: 8.5, color: color, fontWeight: '900', marginTop: 1, letterSpacing: 0.8 }}>{subtitle}</Text>
-    </View>
-);
+const DrawerHeader = ({ title, subtitle, color = '#2563EB', isWorker = false }) => {
+    const insets = useSafeAreaInsets();
+    return (
+        <View style={{ 
+            padding: 16, 
+            paddingTop: Math.max(insets.top, 16),
+            borderBottomWidth: 1, 
+            borderBottomColor: '#F1F5F9', 
+            marginBottom: 8,
+            backgroundColor: '#fff' 
+        }}>
+            <Image 
+                source={require('../../assets/logo.webp')} 
+                style={{ width: 32, height: 32, marginBottom: 6 }} 
+                resizeMode="contain" 
+            />
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>{title}</Text>
+            <Text style={{ fontSize: 8.5, color: color, fontWeight: '900', marginTop: 1, letterSpacing: 0.8 }}>{subtitle}</Text>
+        </View>
+    );
+};
 
 const DrawerSection = ({ title }) => (
     <Text style={{ 
@@ -287,48 +299,52 @@ const WorkerDrawer = () => {
 };
 
 // Foreman Dedicated Tabs
-const ForemanTabs = () => (
-    <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: '#0F172A' }}
-        screenOptions={MODERN_TAB_SCREEN_OPTIONS}
-    >
-        <Tab.Screen
-            name="Dashboard"
-            component={ForemanDashboard}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Tasks"
-            component={ForemanTasksScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Jobs"
-            component={ForemanJobsScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "office-building" : "office-building-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Drawings"
-            component={WorkerDrawingsScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Photos"
-            component={ForemanPhotosScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
-            }}
-        />
-    </Tab.Navigator>
-);
+const ForemanTabs = () => {
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+    return (
+        <Tab.Navigator
+            sceneContainerStyle={{ backgroundColor: '#0F172A' }}
+            screenOptions={getModernTabOptions(insets, isSmallDevice, windowHeight)}
+        >
+            <Tab.Screen
+                name="Dashboard"
+                component={ForemanDashboard}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Tasks"
+                component={ForemanTasksScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Jobs"
+                component={ForemanJobsScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "office-building" : "office-building-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Drawings"
+                component={WorkerDrawingsScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Photos"
+                component={ForemanPhotosScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
+                }}
+            />
+        </Tab.Navigator>
+    );
+};
 
 // High-Fidelity Custom Drawer Content for Foreman
 const ForemanDrawerContent = (props) => {
@@ -507,41 +523,45 @@ const ClientDrawerContent = (props) => {
 };
 
 // Client Dedicated Tabs
-const ClientTabs = () => (
-    <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: '#0F172A' }}
-        screenOptions={MODERN_TAB_SCREEN_OPTIONS}
-    >
-        <Tab.Screen
-            name="Dashboard"
-            component={ClientDashboardScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Projects"
-            component={ClientProjectsScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "briefcase" : "briefcase-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Photos"
-            component={ClientPhotosScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Drawings"
-            component={ClientDrawingsScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
-            }}
-        />
-    </Tab.Navigator>
-);
+const ClientTabs = () => {
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+    return (
+        <Tab.Navigator
+            sceneContainerStyle={{ backgroundColor: '#0F172A' }}
+            screenOptions={getModernTabOptions(insets, isSmallDevice, windowHeight)}
+        >
+            <Tab.Screen
+                name="Dashboard"
+                component={ClientDashboardScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Projects"
+                component={ClientProjectsScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "briefcase" : "briefcase-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Photos"
+                component={ClientPhotosScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Drawings"
+                component={ClientDrawingsScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
+                }}
+            />
+        </Tab.Navigator>
+    );
+};
 
 const ClientDrawer = () => {
     const { width } = useWindowDimensions();
@@ -670,50 +690,54 @@ const ProjectManagerDrawerContent = (props) => {
 
 
 // Project Manager Dedicated Tabs (5 Items as requested)
-const ProjectManagerTabs = () => (
-    <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: '#0F172A' }}
-        screenOptions={MODERN_TAB_SCREEN_OPTIONS}
-    >
-        <Tab.Screen
-            name="ProjectManagerHome"
-            component={ProjectManagerDashboardScreen}
-            options={{
-                tabBarLabel: 'Dashboard',
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Jobs"
-            component={ProjectManagerJobsScreen}
-            options={{
-                tabBarLabel: 'Jobs',
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "office-building" : "office-building-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Tasks"
-            component={TasksScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Drawings"
-            component={ProjectManagerDrawingsScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Photos"
-            component={ProjectManagerPhotosScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
-            }}
-        />
-    </Tab.Navigator>
-);
+const ProjectManagerTabs = () => {
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+    return (
+        <Tab.Navigator
+            sceneContainerStyle={{ backgroundColor: '#0F172A' }}
+            screenOptions={getModernTabOptions(insets, isSmallDevice, windowHeight)}
+        >
+            <Tab.Screen
+                name="ProjectManagerHome"
+                component={ProjectManagerDashboardScreen}
+                options={{
+                    tabBarLabel: 'Dashboard',
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Jobs"
+                component={ProjectManagerJobsScreen}
+                options={{
+                    tabBarLabel: 'Jobs',
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "office-building" : "office-building-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Tasks"
+                component={TasksScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Drawings"
+                component={ProjectManagerDrawingsScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "floor-plan" : "floor-plan"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Photos"
+                component={ProjectManagerPhotosScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera-iris" : "camera-outline"} color={color} size={24} />
+                }}
+            />
+        </Tab.Navigator>
+    );
+};
 
 const ProjectManagerDrawer = () => {
     const { width } = useWindowDimensions();
@@ -790,50 +814,54 @@ const SubcontractorDrawerContent = (props) => {
 };
 
 // Subcontractor Dedicated Tabs
-const SubcontractorTabs = () => (
-    <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: '#0F172A' }}
-        screenOptions={MODERN_TAB_SCREEN_OPTIONS}
-    >
-        <Tab.Screen
-            name="Dashboard"
-            component={SubcontractorDashboardScreen}
-            options={{
-                tabBarLabel: 'Dashboard',
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Jobs"
-            component={SubcontractorProjectsScreen}
-            options={{
-                tabBarLabel: 'Projects',
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "briefcase-check" : "briefcase-check-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Tasks"
-            component={WorkerTasksScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="Photos"
-            component={ForemanPhotosScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera" : "camera-outline"} color={color} size={24} />
-            }}
-        />
-        <Tab.Screen
-            name="RFI"
-            component={RFIScreen}
-            options={{
-                tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "file-document-alert" : "file-document-alert-outline"} color={color} size={24} />
-            }}
-        />
-    </Tab.Navigator>
-);
+const SubcontractorTabs = () => {
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+    return (
+        <Tab.Navigator
+            sceneContainerStyle={{ backgroundColor: '#0F172A' }}
+            screenOptions={getModernTabOptions(insets, isSmallDevice, windowHeight)}
+        >
+            <Tab.Screen
+                name="Dashboard"
+                component={SubcontractorDashboardScreen}
+                options={{
+                    tabBarLabel: 'Dashboard',
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Jobs"
+                component={SubcontractorProjectsScreen}
+                options={{
+                    tabBarLabel: 'Projects',
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "briefcase-check" : "briefcase-check-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Tasks"
+                component={WorkerTasksScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "calendar-check" : "calendar-check-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="Photos"
+                component={ForemanPhotosScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "camera" : "camera-outline"} color={color} size={24} />
+                }}
+            />
+            <Tab.Screen
+                name="RFI"
+                component={RFIScreen}
+                options={{
+                    tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons name={focused ? "file-document-alert" : "file-document-alert-outline"} color={color} size={24} />
+                }}
+            />
+        </Tab.Navigator>
+    );
+};
 
 const SubcontractorDrawer = () => {
     const { width } = useWindowDimensions();
@@ -850,6 +878,11 @@ const SubcontractorDrawer = () => {
             }}
         >
             <Drawer.Screen name="MainTabs" component={SubcontractorTabs} />
+            <Drawer.Screen name="Chatboard" component={WorkerChatboard} />
+            <Drawer.Screen name="Equipment" component={EquipmentScreen} />
+            <Drawer.Screen name="RFI" component={RFIScreen} />
+            <Drawer.Screen name="Reports" component={ReportsScreen} />
+            <Drawer.Screen name="PurchaseOrders" component={PurchaseOrdersScreen} />
         </Drawer.Navigator>
     );
 };
@@ -867,11 +900,14 @@ const MainTabs = () => {
     if (role === 'SUBCONTRACTOR') return <SubcontractorDrawer />;
 
 
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+
     return (
         <Tab.Navigator
             key={role}
             sceneContainerStyle={{ backgroundColor: '#0F172A' }}
-            screenOptions={MODERN_TAB_SCREEN_OPTIONS}
+            screenOptions={getModernTabOptions(insets, isSmallDevice, windowHeight)}
         >
             <Tab.Screen
                 name="Home"

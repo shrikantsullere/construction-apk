@@ -5,9 +5,12 @@ import { COLORS, SHADOWS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBranding = true, showRight = true }) => {
     const { user, projects, notifications, markNotificationAsRead, unreadChatCount } = useApp();
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const [isSearching, setIsSearching] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isNotifying, setIsNotifying] = useState(false);
@@ -56,7 +59,7 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
     };
 
     return (
-        <View style={styles.headerContainer}>
+        <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 20) }]}>
             {/* TOP ROW */}
             <View style={styles.topRow}>
                 <View style={styles.leftSection}>
@@ -79,10 +82,12 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                             <TouchableOpacity
                                 style={styles.menuBtn}
                                 onPress={() => {
-                                    try {
+                                    // Robust drawer opening logic
+                                    const parent = navigation.getParent();
+                                    if (parent && parent.openDrawer) {
+                                        parent.openDrawer();
+                                    } else {
                                         navigation.dispatch(DrawerActions.openDrawer());
-                                    } catch (e) {
-                                        navigation.navigate('MainTabs');
                                     }
                                 }}
                             >
@@ -97,7 +102,10 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                         {title ? (
                             <Text style={styles.brandTitle} numberOfLines={1}>{title}</Text>
                         ) : (
-                            <Text style={styles.orgLabel}>Organization</Text>
+                            <>
+                                <Text style={styles.orgLabel}>Organization</Text>
+                                <Text style={styles.brandTitle}>KAAL Construction</Text>
+                            </>
                         )}
                     </View>
                 )}
@@ -314,7 +322,6 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
 const styles = StyleSheet.create({
     headerContainer: {
         backgroundColor: '#FFFFFF',
-        paddingTop: Platform.OS === 'ios' ? 44 : 32,
         paddingBottom: 8,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
