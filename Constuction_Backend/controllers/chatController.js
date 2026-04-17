@@ -108,18 +108,74 @@ const getChatRooms = async (req, res, next) => {
 const getRoomMessages = async (req, res, next) => {
     try {
         const { roomId } = req.params;
-        const { _id } = req.user;
+        const { _id, companyId, role } = req.user;
 
         if (!mongoose.Types.ObjectId.isValid(roomId)) {
             res.status(400);
             return next(new Error('Invalid Room ID'));
         }
 
-        // Verify participation
-        const participant = await ChatParticipant.findOne({ roomId, userId: _id });
+        // Verify participation — auto-join if legitimately assigned
+        let participant = await ChatParticipant.findOne({ roomId, userId: _id });
+        
         if (!participant) {
-            res.status(403);
-            return next(new Error('You are not authorized to view this room'));
+            // Attempt auto-join based on room type
+            const room = await ChatRoom.findById(roomId);
+            let shouldJoin = false;
+
+            if (room) {
+                if (room.roomType === 'DIRECT') {
+                    const otherExists = await ChatParticipant.findOne({ roomId, userId: { $ne: _id } });
+                    if (otherExists) shouldJoin = true;
+                }
+
+                if (room.roomType === 'PROJECT_GROUP' && room.projectId) {
+                    const project = await Project.findById(room.projectId);
+                    if (project) {
+                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
+                        const isPM = project.pmId?.toString() === _id.toString();
+                        const isClient = project.clientId?.toString() === _id.toString();
+                        const isCreator = project.createdBy?.toString() === _id.toString();
+
+                        if (isAdmin || isPM || isClient || isCreator) {
+                            shouldJoin = true;
+                        } else {
+                            const [Task, Job] = [require('../models/Task'), require('../models/Job')];
+                            const taskAssigned = await Task.exists({ projectId: room.projectId, assignedTo: _id });
+                            if (taskAssigned) {
+                                shouldJoin = true;
+                            } else {
+                                const jobAssigned = await Job.exists({
+                                    projectId: room.projectId,
+                                    $or: [{ foremanId: _id }, { assignedWorkers: _id }, { subcontractorId: _id }]
+                                });
+                                if (jobAssigned) shouldJoin = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!shouldJoin && room.createdBy?.toString() === _id.toString()) {
+                    shouldJoin = true;
+                }
+
+                if (shouldJoin) {
+                    try {
+                        participant = await ChatParticipant.create({
+                            roomId, userId: _id, companyId,
+                            roleAtJoining: role, lastReadAt: new Date()
+                        });
+                        console.log(`[Auto-Join Read] User ${_id} (${role}) joined room ${roomId} (${room.roomType})`);
+                    } catch (syncErr) {
+                        if (syncErr.code !== 11000) console.error('[Auto-Join Read Error]', syncErr.message);
+                    }
+                }
+            }
+
+            if (!participant && !shouldJoin) {
+                res.status(403);
+                return next(new Error('You are not authorized to view this room'));
+            }
         }
 
         const messages = await Chat.find({ roomId })
@@ -170,37 +226,75 @@ const sendMessage = async (req, res, next) => {
             return next(new Error('Valid Room ID is required'));
         }
 
-        // 3. AUTHORIZATION CHECK (Polymorphic)
+        // 3. AUTHORIZATION CHECK (Comprehensive — handles ALL room types)
         let isAuthorized = false;
         
-        // A. Check explicit participation
+        // A. Check explicit participation first (fastest path)
         let participant = await ChatParticipant.findOne({ roomId: actualRoomId, userId: _id });
         if (participant) {
             isAuthorized = true;
-        } else if (projectId) {
-            // B. Check dynamic assignment (Fallback for Subs/Workers not yet synced)
-            const project = await Project.findById(projectId);
-            if (project) {
-                const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
-                const isPM = project.pmId?.toString() === _id.toString();
-                const isClient = project.clientId?.toString() === _id.toString();
-                
-                if (isAdmin || isPM || isClient) {
-                    isAuthorized = true;
-                } else {
-                    // Check if assigned via tasks or jobs
-                    const [Task, Job] = [require('../models/Task'), require('../models/Job')];
-                    const taskAssigned = await Task.exists({ projectId, assignedTo: _id });
-                    if (taskAssigned) {
+        }
+
+        // B. If not a participant yet, attempt smart auto-join based on room type
+        if (!isAuthorized) {
+            const room = await ChatRoom.findById(actualRoomId);
+            
+            if (room) {
+                // --- DIRECT ROOMS ---
+                // If user was supposed to be in a direct room but participant record is missing,
+                // re-add them. This handles edge cases where records were lost or not created.
+                if (room.roomType === 'DIRECT') {
+                    // For direct rooms, check if any other participant exists
+                    const otherParticipant = await ChatParticipant.findOne({ 
+                        roomId: actualRoomId, 
+                        userId: { $ne: _id } 
+                    });
+                    // If room has another participant, this user should also be in it
+                    if (otherParticipant) {
                         isAuthorized = true;
-                    } else {
-                        const jobAssigned = await Job.exists({ projectId, $or: [{ foremanId: _id }, { assignedWorkers: _id }] });
-                        if (jobAssigned) isAuthorized = true;
                     }
                 }
 
-                // AUTO-JOIN: If authorized but not a participant, add them now
-                if (isAuthorized) {
+                // --- PROJECT GROUP ROOMS ---
+                if (room.roomType === 'PROJECT_GROUP' && room.projectId) {
+                    const project = await Project.findById(room.projectId);
+                    if (project) {
+                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
+                        const isPM = project.pmId?.toString() === _id.toString();
+                        const isClient = project.clientId?.toString() === _id.toString();
+                        const isCreator = project.createdBy?.toString() === _id.toString();
+                        
+                        if (isAdmin || isPM || isClient || isCreator) {
+                            isAuthorized = true;
+                        } else {
+                            // Check via tasks, jobs, or subcontractor assignment
+                            const [Task, Job] = [require('../models/Task'), require('../models/Job')];
+                            const taskAssigned = await Task.exists({ projectId: room.projectId, assignedTo: _id });
+                            if (taskAssigned) {
+                                isAuthorized = true;
+                            } else {
+                                const jobAssigned = await Job.exists({ 
+                                    projectId: room.projectId, 
+                                    $or: [
+                                        { foremanId: _id }, 
+                                        { assignedWorkers: _id },
+                                        { subcontractorId: _id }
+                                    ] 
+                                });
+                                if (jobAssigned) isAuthorized = true;
+                            }
+                        }
+                    }
+                }
+
+                // --- GENERIC ROOMS (custom groups, etc.) ---
+                // If the user created the room, they should be authorized
+                if (!isAuthorized && room.createdBy?.toString() === _id.toString()) {
+                    isAuthorized = true;
+                }
+
+                // AUTO-JOIN: If authorized but not a participant, create the record now
+                if (isAuthorized && !participant) {
                     try {
                         participant = await ChatParticipant.create({
                             roomId: actualRoomId,
@@ -209,9 +303,12 @@ const sendMessage = async (req, res, next) => {
                             roleAtJoining: role,
                             lastReadAt: new Date()
                         });
-                        console.log(`[Auto-Join] User ${_id} added as participant to room ${actualRoomId}`);
+                        console.log(`[Auto-Join] User ${_id} (${role}) added to room ${actualRoomId} (${room.roomType})`);
                     } catch (syncErr) {
-                        console.error('[Auto-Join Error]', syncErr);
+                        // Ignore duplicate key errors (race condition safety)
+                        if (syncErr.code !== 11000) {
+                            console.error('[Auto-Join Error]', syncErr.message);
+                        }
                     }
                 }
             }
@@ -220,8 +317,9 @@ const sendMessage = async (req, res, next) => {
         if (!isAuthorized) {
             console.error(`[Chat Auth Failure] User ${_id} (${role}) unauthorized for room ${actualRoomId}`);
             res.status(403);
-            return next(new Error('You are not authorized to send messages to this room. Please contact your manager.'));
+            return next(new Error('You are not authorized to send messages to this room'));
         }
+
 
         // 4. CREATE MESSAGE
         const chat = await Chat.create({
