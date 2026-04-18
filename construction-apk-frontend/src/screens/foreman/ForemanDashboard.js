@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, ActivityIndicator, StatusBar, SafeAreaView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, ActivityIndicator, StatusBar, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS, SPACING } from '../../constants/theme';
@@ -54,7 +54,7 @@ const ForemanDashboard = ({ navigation }) => {
     ];
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar barStyle="dark-content" />
             <WorkerHeader showBranding={true} />
             <ScrollView 
@@ -151,13 +151,13 @@ const ForemanDashboard = ({ navigation }) => {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    scrollContent: { padding: 14, paddingTop: 10, paddingBottom: 60 },
+    scrollContent: { padding: 14, paddingTop: 0, paddingBottom: 60 },
 
     headerSubtitleWrap: { marginBottom: 6, paddingLeft: 2 },
     headerTitle: { fontSize: width < 380 ? 28 : 32, fontWeight: '900', color: '#0F172A', letterSpacing: -1 },

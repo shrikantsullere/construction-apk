@@ -46,10 +46,12 @@ const WorkerChatScreen = ({ navigation, route }) => {
         if (!msgText.trim()) return;
         setSending(true);
         try {
-            // Explicitly pass based on room type
+            // Pass correct params: sendMessage(text, projectId, receiverId, roomId)
+            // room.id = ChatRoom._id (always pass as roomId)
+            // room.projectId = Project._id (pass as projectId if available)
             const success = room.type === 'private'
                 ? await sendMessage(msgText, null, room.id)
-                : await sendMessage(msgText, room.id);
+                : await sendMessage(msgText, room.projectId || null, null, room.id);
             
             if (success) {
                 setMsgText('');
@@ -123,7 +125,7 @@ const WorkerChatScreen = ({ navigation, route }) => {
             // 2. Send the message with attachment
             const success = room.type === 'private'
                 ? await sendMessage("[Photo Attachment]", null, room.id, room.id, [attachment])
-                : await sendMessage("[Photo Attachment]", room.id, null, room.id, [attachment]);
+                : await sendMessage("[Photo Attachment]", room.projectId || null, null, room.id, [attachment]);
             
             if (success) {
                 setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);

@@ -102,7 +102,7 @@ const ChatScreen = ({ navigation }) => {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" />
-            <WorkerHeader title="Site Communications" hideSearch />
+            <WorkerHeader title="Site Communications" hideSearch showBack={true} />
 
             <View style={styles.searchSection}>
                 <View style={styles.searchBar}>

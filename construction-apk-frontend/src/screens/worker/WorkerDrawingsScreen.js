@@ -1,20 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Animated, ActivityIndicator, Dimensions, ScrollView, Share, Linking, Modal, Pressable, Alert } from 'react-native';
+import { 
+    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+    TextInput, Animated, ActivityIndicator, Dimensions, 
+    ScrollView, Share, Linking, Modal, Pressable, Alert, SafeAreaView, StatusBar
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, SHADOWS, SIZES } from '../../constants/theme';
+import { COLORS, SHADOWS } from '../../constants/theme';
 import WorkerHeader from '../../components/WorkerHeader';
 import api, { getServerUrl } from '../../utils/api';
-import { Card, Badge } from '../../components/shared/CommonUI';
+import { useApp } from '../../context/AppContext';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const WorkerDrawingsScreen = () => {
+    const { projects } = useApp();
     const [drawings, setDrawings] = useState([]);
     const [loading, setLoading] = useState(true);
+    
+    // Filtering
     const [search, setSearch] = useState('');
+    const [activeProject, setActiveProject] = useState('All');
+    const [activeCategory, setActiveCategory] = useState('All');
+    
+    // Details Modal
     const [selectedDrawing, setSelectedDrawing] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
+    
     const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    const categories = ['All', 'Architecture', 'Structural', 'Plumbing', 'Electrical', 'HVAC'];
 
     const fetchDrawings = async () => {
         try {
@@ -33,45 +47,20 @@ const WorkerDrawingsScreen = () => {
         fetchDrawings();
     }, []);
 
-    const filteredDrawings = (drawings || []).filter(d =>
-        d.title?.toLowerCase().includes(search.toLowerCase()) ||
-        d.projectId?.name?.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredDrawings = (drawings || []).filter(d => {
+        const matchesSearch = (d.title || '').toLowerCase().includes(search.toLowerCase()) || 
+                             (d.drawingNumber || '').toLowerCase().includes(search.toLowerCase());
+        const matchesProject = activeProject === 'All' || d.projectId?._id === activeProject || d.projectId === activeProject;
+        const matchesCategory = activeCategory === 'All' || (d.category || '').toLowerCase() === activeCategory.toLowerCase();
+        
+        return matchesSearch && matchesProject && matchesCategory;
+    });
 
     const getLatestFileUrl = (item) => {
         if (!item || !item.versions || item.versions.length === 0) return null;
-        // Find version that matches currentVersion or fallback to last
         const ver = item.versions.find(v => v.versionNumber === item.currentVersion) || item.versions[item.versions.length - 1];
         if (!ver?.fileUrl) return null;
         return getServerUrl(ver.fileUrl);
-    };
-
-    const handleShare = async (item) => {
-        const url = getLatestFileUrl(item);
-        if (!url) {
-            Alert.alert('File Error', 'This document does not have a valid file link.');
-            return;
-        }
-        try {
-            await Share.share({
-                message: `Project Drawing: ${item.title}\nProject: ${item.projectId?.name || 'Site'}\nVersion: v${item.currentVersion}\nURL: ${url}`,
-                title: item.title,
-            });
-        } catch (error) {
-            console.error(error.message);
-        }
-    };
-
-    const handleDownload = (item) => {
-        const url = getLatestFileUrl(item);
-        if (url) {
-            Linking.openURL(url).catch(err => {
-                console.error('Link Error:', err);
-                Alert.alert('Link Error', 'Cannot open this document URL.');
-            });
-        } else {
-            Alert.alert('File Error', 'No file found for this drawing.');
-        }
     };
 
     const handleView = (item) => {
@@ -79,184 +68,302 @@ const WorkerDrawingsScreen = () => {
         setModalVisible(true);
     };
 
-    const openDocument = () => {
-        const url = getLatestFileUrl(selectedDrawing);
-        if (url) {
-            setModalVisible(false);
-            Linking.openURL(url);
+    const handleShare = async (item) => {
+        const url = getLatestFileUrl(item);
+        if (!url) {
+            Alert.alert('Error', 'No file link available for this drawing.');
+            return;
+        }
+        try {
+            await Share.share({
+                message: `Project Drawing: ${item.title}\nProject: ${item.projectId?.name || 'Site'}\nURL: ${url}`,
+                title: item.title,
+            });
+        } catch (error) {
+            console.error(error.message);
         }
     };
 
-    const renderActionBtn = (icon, color, onPress, label) => (
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: color + '10', borderColor: color + '20' }]} onPress={onPress}>
-            <MaterialCommunityIcons name={icon} size={16} color={color} />
-            {label && <Text style={[styles.actionBtnText, { color }]}>{label}</Text>}
-        </TouchableOpacity>
+    const openDocument = () => {
+        const url = getLatestFileUrl(selectedDrawing);
+        if (url) {
+            Linking.openURL(url);
+        } else {
+            Alert.alert('Error', 'Document file not found.');
+        }
+    };
+
+    // Selection Logic
+    const [selectorVisible, setSelectorVisible] = useState(false);
+    const [selectorType, setSelectorType] = useState(null); // 'project' or 'discipline'
+
+    const openSelector = (type) => {
+        setSelectorType(type);
+        setSelectorVisible(true);
+    };
+
+    const handleSelect = (value) => {
+        if (selectorType === 'project') {
+            setActiveProject(value);
+        } else {
+            setActiveCategory(value);
+        }
+        setSelectorVisible(false);
+    };
+
+    const renderHeader = () => (
+        <View style={styles.headerArea}>
+            <View style={styles.titleInfo}>
+                <Text style={styles.mainTitle}>Drawings & Blueprints</Text>
+                <Text style={styles.subTitle}>Manage latest revisions and architectural plans.</Text>
+            </View>
+
+            <View style={styles.controlPanel}>
+                <View style={styles.searchBar}>
+                    <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
+                    <TextInput 
+                        style={styles.searchInput}
+                        placeholder="Search drawings..."
+                        placeholderTextColor="#94A3B8"
+                        value={search}
+                        onChangeText={setSearch}
+                    />
+                </View>
+
+                <View style={styles.filtersRow}>
+                    <TouchableOpacity 
+                        style={styles.dropdown} 
+                        onPress={() => openSelector('project')}
+                    >
+                        <Text style={styles.dropdownLabel} numberOfLines={1}>
+                            {activeProject === 'All' ? 'All Projects' : (projects.find(p => p._id === activeProject || p.id === activeProject)?.name || 'Project')}
+                        </Text>
+                        <MaterialCommunityIcons name="chevron-down" size={16} color="#475569" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.dropdown} 
+                        onPress={() => openSelector('discipline')}
+                    >
+                        <Text style={styles.dropdownLabel}>{activeCategory === 'All' ? 'All Disciplines' : activeCategory}</Text>
+                        <MaterialCommunityIcons name="chevron-down" size={16} color="#475569" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <View style={styles.tableHead}>
+                <Text style={[styles.headCol, { flex: 2.5 }]}>DRAWING NAME</Text>
+                <Text style={[styles.headCol, { flex: 1.5 }]}>PROJECT</Text>
+                <Text style={[styles.headCol, { flex: 1 }]}>VERSION</Text>
+                <Text style={[styles.headCol, { flex: 1, textAlign: 'right' }]}>DATE</Text>
+            </View>
+        </View>
     );
 
     const renderDrawingItem = ({ item }) => (
-        <Animated.View style={[styles.drawingRow, { opacity: fadeAnim }]}>
-            <View style={styles.cardLayout}>
-                <View style={styles.nameSection}>
-                    <View style={styles.itemIconBox}>
-                        <MaterialCommunityIcons
-                            name={item.category === 'structural' ? 'office-building' : 'text-box-outline'}
-                            size={18}
-                            color="#2563EB"
-                        />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.itemName}>{item.title}</Text>
-                        <Text style={styles.itemSubName}>{item.category?.toUpperCase() || 'ARCHITECTURAL'} • {item.drawingNumber || 'A-132'}</Text>
-                    </View>
-                    <View style={[styles.statusTag, { backgroundColor: item.status === 'active' ? '#DCFCE7' : '#F1F5F9' }]}>
-                        <Text style={[styles.statusTagText, { color: item.status === 'active' ? '#166534' : '#64748B' }]}>
-                            {(item.status || 'ACTIVE').toUpperCase()}
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={styles.infoGrid}>
-                    <View style={styles.infoCol}>
-                        <Text style={styles.infoLabel}>SITE / PROJECT</Text>
-                        <Text style={styles.infoValue} numberOfLines={1}>{item.projectId?.name || '---'}</Text>
-                    </View>
-                    <View style={styles.infoCol}>
-                        <Text style={styles.infoLabel}>VERSION</Text>
-                        <Text style={styles.infoValue}>v{item.currentVersion}.0</Text>
-                    </View>
-                    <View style={styles.infoCol}>
-                        <Text style={styles.infoLabel}>REVISION DATE</Text>
-                        <Text style={styles.infoValue}>{new Date(item.updatedAt).toLocaleDateString()}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.actionsBar}>
-                    <Text style={styles.actionsLabel}>QUICK COMMANDS</Text>
-                    <View style={styles.actionRow}>
-                        {renderActionBtn('eye-outline', '#1E293B', () => handleView(item), 'VIEW')}
-                        {renderActionBtn('share-variant-outline', '#9333EA', () => handleShare(item), 'SEND')}
-                    </View>
+        <TouchableOpacity style={styles.tableRow} activeOpacity={0.7} onPress={() => handleView(item)}>
+            <View style={{ flex: 2.5 }}>
+                <Text style={styles.rowName} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.rowSubName}>{item.drawingNumber || 'A-XX'}</Text>
+            </View>
+            <View style={{ flex: 1.5 }}>
+                <Text style={styles.rowProject} numberOfLines={1}>{item.projectId?.name || '---'}</Text>
+            </View>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+                <View style={styles.vBadge}>
+                    <Text style={styles.vText}>v{item.currentVersion}.0</Text>
                 </View>
             </View>
-        </Animated.View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={styles.rowDate}>{new Date(item.updatedAt).toLocaleDateString([], { month: 'short', day: '2-digit' })}</Text>
+            </View>
+        </TouchableOpacity>
     );
 
     return (
-        <View style={styles.container}>
-            <WorkerHeader title="Drawings" />
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+            <WorkerHeader hideSearch={true} title="Drawing Management" />
+            
+            {loading ? (
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color="#2563EB" />
+                    <Text style={styles.loadingInfo}>Syncing Blueprints...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={filteredDrawings}
+                    keyExtractor={item => item._id || item.id}
+                    renderItem={renderDrawingItem}
+                    ListHeaderComponent={renderHeader}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContent}>
+                            <MaterialCommunityIcons name="file-search-outline" size={64} color="#E2E8F0" />
+                            <Text style={styles.emptyMainText}>No blueprints found</Text>
+                            <Text style={styles.emptySubText}>Try adjusting your search or filters.</Text>
+                        </View>
+                    }
+                />
+            )}
 
-            <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons name="floor-plan" size={80} color="#E2E8F0" />
-                <Text style={styles.emptyTitle}>Site Drawings</Text>
-                <Text style={styles.emptySubtitle}>Content is being updated by the Project Manager.</Text>
-            </View>
+            {/* SELECTION MODAL */}
+            <Modal transparent visible={selectorVisible} animationType="fade">
+                <Pressable style={styles.selectorOverlay} onPress={() => setSelectorVisible(false)}>
+                    <View style={styles.selectorContent}>
+                        <View style={styles.selectorHeader}>
+                            <Text style={styles.selectorTitle}>Select {selectorType === 'project' ? 'Project' : 'Discipline'}</Text>
+                            <TouchableOpacity onPress={() => setSelectorVisible(false)}>
+                                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <TouchableOpacity 
+                                style={[styles.selectorItem, (selectorType === 'project' ? activeProject : activeCategory) === 'All' && styles.selectorItemActive]}
+                                onPress={() => handleSelect('All')}
+                            >
+                                <Text style={[styles.selectorText, (selectorType === 'project' ? activeProject : activeCategory) === 'All' && styles.selectorTextActive]}>
+                                    All {selectorType === 'project' ? 'Projects' : 'Disciplines'}
+                                </Text>
+                            </TouchableOpacity>
+                            {(selectorType === 'project' ? projects : categories.slice(1)).map((option) => (
+                                <TouchableOpacity 
+                                    key={option._id || option.id || option}
+                                    style={[styles.selectorItem, (selectorType === 'project' ? activeProject : activeCategory) === (option._id || option.id || option) && styles.selectorItemActive]}
+                                    onPress={() => handleSelect(option._id || option.id || option)}
+                                >
+                                    <Text style={[styles.selectorText, (selectorType === 'project' ? activeProject : activeCategory) === (option._id || option.id || option) && styles.selectorTextActive]}>
+                                        {option.name || option}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </Pressable>
+            </Modal>
 
-            {/* DRAWING DETAILS MODAL */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={modalVisible}
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <View style={styles.modalIcon}>
-                                <MaterialCommunityIcons name="file-pdf-box" size={32} color="#EF4444" />
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 16 }}>
-                                <Text style={styles.modalTitle}>{selectedDrawing?.title}</Text>
-                                <Text style={styles.modalSubtitle}>{selectedDrawing?.drawingNumber} • {selectedDrawing?.category?.toUpperCase()}</Text>
-                            </View>
+            {/* DETAILS MODAL */}
+            <Modal transparent visible={modalVisible} animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalPanel}>
+                        <View style={styles.modalTopRow}>
+                            <Text style={styles.modalHeaderTitle}>Blueprint Overview</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
                                 <MaterialCommunityIcons name="close" size={24} color="#64748B" />
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.detailsGrid}>
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>PROJECT</Text>
-                                <Text style={styles.detailValue}>{selectedDrawing?.projectId?.name}</Text>
-                            </View>
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>CURRENT REVISION</Text>
-                                <Text style={styles.detailValue}>v{selectedDrawing?.currentVersion}.0</Text>
-                            </View>
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>RELEASED ON</Text>
-                                <Text style={styles.detailValue}>{selectedDrawing ? new Date(selectedDrawing.createdAt).toLocaleDateString() : ''}</Text>
-                            </View>
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>STATUS</Text>
-                                <Badge label={selectedDrawing?.status?.toUpperCase() || 'ACTIVE'} bg="#DCFCE7" color="#166534" />
-                            </View>
-                        </View>
+                        {selectedDrawing && (
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                <View style={styles.docBanner}>
+                                    <View style={styles.pdfIconBox}>
+                                        <MaterialCommunityIcons name="file-pdf-box" size={40} color="#EF4444" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 15 }}>
+                                        <Text style={styles.bannerTitle}>{selectedDrawing.title}</Text>
+                                        <Text style={styles.bannerMeta}>{selectedDrawing.drawingNumber} • {selectedDrawing.category?.toUpperCase()}</Text>
+                                    </View>
+                                </View>
 
-                        <TouchableOpacity style={styles.primaryAction} onPress={openDocument}>
-                            <MaterialCommunityIcons name="file-search-outline" size={20} color="#fff" />
-                            <Text style={styles.primaryActionText}>OPEN DOCUMENT</Text>
-                        </TouchableOpacity>
+                                <View style={styles.gridContainer}>
+                                    <View style={styles.gridItem}>
+                                        <Text style={styles.gridLabel}>PROJECT SITE</Text>
+                                        <Text style={styles.gridValue}>{selectedDrawing.projectId?.name || '---'}</Text>
+                                    </View>
+                                    <View style={styles.gridItem}>
+                                        <Text style={styles.gridLabel}>LATEST VERSION</Text>
+                                        <Text style={styles.gridValue}>v{selectedDrawing.currentVersion}.0</Text>
+                                    </View>
+                                    <View style={styles.gridItem}>
+                                        <Text style={styles.gridLabel}>RELEASE DATE</Text>
+                                        <Text style={styles.gridValue}>{new Date(selectedDrawing.updatedAt).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={styles.gridItem}>
+                                        <Text style={styles.gridLabel}>STATUS</Text>
+                                        <Text style={[styles.gridValue, { color: '#059669' }]}>{selectedDrawing.status?.toUpperCase() || 'ACTIVE'}</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.actionRow}>
+                                    <TouchableOpacity style={styles.btnAlt} onPress={() => handleShare(selectedDrawing)}>
+                                        <MaterialCommunityIcons name="share-variant" size={20} color="#1E293B" />
+                                        <Text style={styles.btnAltText}>Share</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.btnMain} onPress={() => { setModalVisible(false); Linking.openURL(getLatestFileUrl(selectedDrawing)); }}>
+                                        <MaterialCommunityIcons name="eye" size={20} color="#fff" />
+                                        <Text style={styles.btnMainText}>Open Blueprint</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </ScrollView>
+                        )}
                     </View>
-                </Pressable>
+                </View>
             </Modal>
-        </View>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    content: { flex: 1, paddingTop: 16 },
-    pageHeader: { paddingHorizontal: 24, marginBottom: 20 },
-    pageTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
-    pageSubtitle: { fontSize: 13, fontWeight: '600', color: '#64748B', marginTop: 2 },
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    listContent: { paddingBottom: 100 },
 
-    filterArea: { paddingHorizontal: 24, marginBottom: 20 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', height: 48, borderRadius: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: '#E2E8F0', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
-    searchInput: { flex: 1, marginLeft: 12, fontSize: 14, fontWeight: '600', color: '#1E293B' },
+    headerArea: { padding: 20, backgroundColor: '#FFFFFF' },
+    titleInfo: { marginBottom: 25 },
+    mainTitle: { fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    subTitle: { fontSize: 13, fontWeight: '600', color: '#64748B', marginTop: 4 },
 
-    listContainer: { paddingHorizontal: 24, paddingBottom: 100 },
-    drawingRow: { backgroundColor: '#fff', borderRadius: 24, marginBottom: 16, borderLeftWidth: 6, borderLeftColor: '#2563EB', elevation: 3, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 10 },
-    cardLayout: { padding: 20 },
+    controlPanel: { marginBottom: 20 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', height: 52, borderRadius: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 15 },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '700', color: '#1E293B' },
 
-    nameSection: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 16 },
-    itemIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
-    itemName: { fontSize: 17, fontWeight: '900', color: '#0F172A' },
-    itemSubName: { fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, marginTop: 1 },
+    filtersRow: { flexDirection: 'row', gap: 12 },
+    dropdown: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', height: 44, borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    dropdownLabel: { fontSize: 12, fontWeight: '800', color: '#475569', flex: 1 },
 
-    infoGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-    infoCol: { flex: 1 },
-    infoLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.8, marginBottom: 4 },
-    infoValue: { fontSize: 12, fontWeight: '800', color: '#334155' },
+    tableHead: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', marginTop: 10 },
+    headCol: { fontSize: 10, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
 
-    statusTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    statusTagText: { fontSize: 9, fontWeight: '900' },
+    tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F8FAFC', paddingHorizontal: 4 },
+    rowName: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
+    rowSubName: { fontSize: 11, fontWeight: '700', color: '#94A3B8', marginTop: 1 },
+    rowProject: { fontSize: 12, fontWeight: '800', color: '#444' },
+    vBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    vText: { fontSize: 10, fontWeight: '900', color: '#64748B' },
+    rowDate: { fontSize: 11, fontWeight: '700', color: '#94A3B8' },
 
-    actionsBar: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    actionsLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8', letterSpacing: 1.2 },
-    actionRow: { flexDirection: 'row', gap: 12 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1, minWidth: 60, justifyContent: 'center', gap: 6 },
-    actionBtnText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+    loadingInfo: { marginTop: 15, fontSize: 13, fontWeight: '700', color: '#64748B' },
+    emptyContent: { alignItems: 'center', marginTop: 80, paddingHorizontal: 40 },
+    emptyMainText: { marginTop: 16, fontSize: 18, fontWeight: '900', color: '#1E293B' },
+    emptySubText: { marginTop: 4, fontSize: 14, fontWeight: '600', color: '#94A3B8', textAlign: 'center' },
 
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, maxHeight: '80%' },
-    modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-    modalIcon: { width: 60, height: 60, borderRadius: 16, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center' },
-    modalTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
-    modalSubtitle: { fontSize: 12, fontWeight: '700', color: '#64748B', marginTop: 2 },
+    // Selection Modal
+    selectorOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 30 },
+    selectorContent: { backgroundColor: '#fff', borderRadius: 24, padding: 20, width: '100%', maxHeight: '70%' },
+    selectorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    selectorTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
+    selectorItem: { paddingVertical: 15, paddingHorizontal: 15, borderRadius: 12, marginBottom: 5 },
+    selectorItemActive: { backgroundColor: '#EFF6FF' },
+    selectorText: { fontSize: 15, fontWeight: '700', color: '#475569' },
+    selectorTextActive: { color: '#2563EB', fontWeight: '900' },
 
-    detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, marginBottom: 32 },
-    detailItem: { width: '45%' },
-    detailLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4 },
-    detailValue: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
-
-    primaryAction: { backgroundColor: '#2563EB', height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 4, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 8 },
-    primaryActionText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
-
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 100 },
-    emptyTitle: { fontSize: 24, fontWeight: '900', color: '#1E293B', marginTop: 16 },
-    emptySubtitle: { fontSize: 14, fontWeight: '600', color: '#94A3B8', textAlign: 'center', marginTop: 8 },
-    emptyText: { marginTop: 16, color: '#94A3B8', fontSize: 14, fontWeight: '700' }
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'flex-end',  },
+    modalPanel: { backgroundColor: '#fff', borderTopLeftRadius: 36, borderTopRightRadius: 36, padding: 25, minHeight: '55%' },
+    modalTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+    modalHeaderTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+    docBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 20, borderRadius: 24, marginBottom: 25 },
+    pdfIconBox: { width: 64, height: 64, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...SHADOWS.small },
+    bannerTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
+    bannerMeta: { fontSize: 13, fontWeight: '700', color: '#94A3B8', marginTop: 4 },
+    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, marginBottom: 35 },
+    gridItem: { width: '46%' },
+    gridLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.8, marginBottom: 4 },
+    gridValue: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
+    actionRow: { flexDirection: 'row', gap: 15 },
+    btnAlt: { flex: 1, height: 56, borderRadius: 18, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+    btnAltText: { fontSize: 15, fontWeight: '900', color: '#1E293B' },
+    btnMain: { flex: 2, height: 56, borderRadius: 18, backgroundColor: '#2563EB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, ...SHADOWS.small },
+    btnMainText: { fontSize: 15, fontWeight: '900', color: '#fff' }
 });
 
 export default WorkerDrawingsScreen;

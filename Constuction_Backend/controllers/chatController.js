@@ -108,18 +108,74 @@ const getChatRooms = async (req, res, next) => {
 const getRoomMessages = async (req, res, next) => {
     try {
         const { roomId } = req.params;
-        const { _id } = req.user;
+        const { _id, companyId, role } = req.user;
 
         if (!mongoose.Types.ObjectId.isValid(roomId)) {
             res.status(400);
             return next(new Error('Invalid Room ID'));
         }
 
-        // Verify participation
-        const participant = await ChatParticipant.findOne({ roomId, userId: _id });
+        // Verify participation — auto-join if legitimately assigned
+        let participant = await ChatParticipant.findOne({ roomId, userId: _id });
+        
         if (!participant) {
-            res.status(403);
-            return next(new Error('You are not authorized to view this room'));
+            // Attempt auto-join based on room type
+            const room = await ChatRoom.findById(roomId);
+            let shouldJoin = false;
+
+            if (room) {
+                if (room.roomType === 'DIRECT') {
+                    const otherExists = await ChatParticipant.findOne({ roomId, userId: { $ne: _id } });
+                    if (otherExists) shouldJoin = true;
+                }
+
+                if (room.roomType === 'PROJECT_GROUP' && room.projectId) {
+                    const project = await Project.findById(room.projectId);
+                    if (project) {
+                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
+                        const isPM = project.pmId?.toString() === _id.toString();
+                        const isClient = project.clientId?.toString() === _id.toString();
+                        const isCreator = project.createdBy?.toString() === _id.toString();
+
+                        if (isAdmin || isPM || isClient || isCreator) {
+                            shouldJoin = true;
+                        } else {
+                            const [Task, Job] = [require('../models/Task'), require('../models/Job')];
+                            const taskAssigned = await Task.exists({ projectId: room.projectId, assignedTo: _id });
+                            if (taskAssigned) {
+                                shouldJoin = true;
+                            } else {
+                                const jobAssigned = await Job.exists({
+                                    projectId: room.projectId,
+                                    $or: [{ foremanId: _id }, { assignedWorkers: _id }, { subcontractorId: _id }]
+                                });
+                                if (jobAssigned) shouldJoin = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!shouldJoin && room.createdBy?.toString() === _id.toString()) {
+                    shouldJoin = true;
+                }
+
+                if (shouldJoin) {
+                    try {
+                        participant = await ChatParticipant.create({
+                            roomId, userId: _id, companyId,
+                            roleAtJoining: role, lastReadAt: new Date()
+                        });
+                        console.log(`[Auto-Join Read] User ${_id} (${role}) joined room ${roomId} (${room.roomType})`);
+                    } catch (syncErr) {
+                        if (syncErr.code !== 11000) console.error('[Auto-Join Read Error]', syncErr.message);
+                    }
+                }
+            }
+
+            if (!participant && !shouldJoin) {
+                res.status(403);
+                return next(new Error('You are not authorized to view this room'));
+            }
         }
 
         const messages = await Chat.find({ roomId })
@@ -137,50 +193,170 @@ const getRoomMessages = async (req, res, next) => {
 // @access  Private
 const sendMessage = async (req, res, next) => {
     try {
-        const { roomId, message, attachments } = req.body;
-        const { _id, companyId } = req.user;
+        let { roomId, message, attachments, projectId } = req.body;
+        const { _id, companyId, role } = req.user;
 
-        // Verify participation
-        const participant = await ChatParticipant.findOne({ roomId, userId: _id });
-        if (!participant) {
+        if (!roomId && !projectId) {
+            res.status(400);
+            return next(new Error('Destination Room ID or Project ID is required'));
+        }
+
+        // 1. SMART RESOLUTION: If roomId looks like a Project ID, resolve it
+        if (roomId && !projectId && mongoose.Types.ObjectId.isValid(roomId)) {
+            const projectExists = await Project.exists({ _id: roomId });
+            if (projectExists) {
+                projectId = roomId;
+            }
+        }
+
+        // 2. FIND OR RESOLVE ROOM
+        let actualRoomId = roomId;
+        if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+            const room = await ChatRoom.findOne({ projectId, roomType: 'PROJECT_GROUP' });
+            if (room) {
+                actualRoomId = room._id;
+            } else if (!roomId) {
+                res.status(404);
+                return next(new Error('Project chat room not found'));
+            }
+        }
+
+        if (!actualRoomId || !mongoose.Types.ObjectId.isValid(actualRoomId)) {
+            res.status(400);
+            return next(new Error('Valid Room ID is required'));
+        }
+
+        // 3. AUTHORIZATION CHECK (Comprehensive — handles ALL room types)
+        let isAuthorized = false;
+        
+        // A. Check explicit participation first (fastest path)
+        let participant = await ChatParticipant.findOne({ roomId: actualRoomId, userId: _id });
+        if (participant) {
+            isAuthorized = true;
+        }
+
+        // B. If not a participant yet, attempt smart auto-join based on room type
+        if (!isAuthorized) {
+            const room = await ChatRoom.findById(actualRoomId);
+            
+            if (room) {
+                // --- DIRECT ROOMS ---
+                // If user was supposed to be in a direct room but participant record is missing,
+                // re-add them. This handles edge cases where records were lost or not created.
+                if (room.roomType === 'DIRECT') {
+                    // For direct rooms, check if any other participant exists
+                    const otherParticipant = await ChatParticipant.findOne({ 
+                        roomId: actualRoomId, 
+                        userId: { $ne: _id } 
+                    });
+                    // If room has another participant, this user should also be in it
+                    if (otherParticipant) {
+                        isAuthorized = true;
+                    }
+                }
+
+                // --- PROJECT GROUP ROOMS ---
+                if (room.roomType === 'PROJECT_GROUP' && room.projectId) {
+                    const project = await Project.findById(room.projectId);
+                    if (project) {
+                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
+                        const isPM = project.pmId?.toString() === _id.toString();
+                        const isClient = project.clientId?.toString() === _id.toString();
+                        const isCreator = project.createdBy?.toString() === _id.toString();
+                        
+                        if (isAdmin || isPM || isClient || isCreator) {
+                            isAuthorized = true;
+                        } else {
+                            // Check via tasks, jobs, or subcontractor assignment
+                            const [Task, Job] = [require('../models/Task'), require('../models/Job')];
+                            const taskAssigned = await Task.exists({ projectId: room.projectId, assignedTo: _id });
+                            if (taskAssigned) {
+                                isAuthorized = true;
+                            } else {
+                                const jobAssigned = await Job.exists({ 
+                                    projectId: room.projectId, 
+                                    $or: [
+                                        { foremanId: _id }, 
+                                        { assignedWorkers: _id },
+                                        { subcontractorId: _id }
+                                    ] 
+                                });
+                                if (jobAssigned) isAuthorized = true;
+                            }
+                        }
+                    }
+                }
+
+                // --- GENERIC ROOMS (custom groups, etc.) ---
+                // If the user created the room, they should be authorized
+                if (!isAuthorized && room.createdBy?.toString() === _id.toString()) {
+                    isAuthorized = true;
+                }
+
+                // AUTO-JOIN: If authorized but not a participant, create the record now
+                if (isAuthorized && !participant) {
+                    try {
+                        participant = await ChatParticipant.create({
+                            roomId: actualRoomId,
+                            userId: _id,
+                            companyId,
+                            roleAtJoining: role,
+                            lastReadAt: new Date()
+                        });
+                        console.log(`[Auto-Join] User ${_id} (${role}) added to room ${actualRoomId} (${room.roomType})`);
+                    } catch (syncErr) {
+                        // Ignore duplicate key errors (race condition safety)
+                        if (syncErr.code !== 11000) {
+                            console.error('[Auto-Join Error]', syncErr.message);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isAuthorized) {
+            console.error(`[Chat Auth Failure] User ${_id} (${role}) unauthorized for room ${actualRoomId}`);
             res.status(403);
             return next(new Error('You are not authorized to send messages to this room'));
         }
 
+
+        // 4. CREATE MESSAGE
         const chat = await Chat.create({
             companyId,
             sender: _id,
-            roomId,
+            roomId: actualRoomId,
+            projectId: projectId || null,
             message,
             attachments
         });
 
         const fullChat = await Chat.findById(chat._id).populate('sender', 'fullName role avatar');
 
-        // Update sender's lastReadAt
-        participant.lastReadAt = new Date();
-        await participant.save();
-
-        // Emit to room IMMEDIATELY for responsiveness
-        const io = req.app.get('io');
-        if (io) {
-            io.to(roomId.toString()).emit('new_message', fullChat);
+        // Update sender's lastReadAt if they are a participant
+        if (participant) {
+            participant.lastReadAt = new Date();
+            await participant.save();
         }
 
-        // Notify participants who/what room has a new message (Background)
-        const notifyOthers = async () => {
-            const allParticipants = await ChatParticipant.find({ roomId, userId: { $ne: _id } });
-            allParticipants.forEach(p => {
-                const targetUid = p.userId.toString();
-                io.to(targetUid).emit('new_notification', {
-                    type: 'chat',
-                    roomId,
-                    senderName: req.user.fullName
+        // 5. REAL-TIME EMISSION
+        const io = req.app.get('io');
+        if (io) {
+            io.to(actualRoomId.toString()).emit('new_message', fullChat);
+            
+            // Background notifications
+            const notifyOthers = async () => {
+                const others = await ChatParticipant.find({ roomId: actualRoomId, userId: { $ne: _id } });
+                others.forEach(p => {
+                    io.to(p.userId.toString()).emit('new_notification', {
+                        type: 'chat',
+                        roomId: actualRoomId,
+                        senderName: req.user.fullName
+                    });
                 });
-            });
-        };
-
-        if (io) notifyOthers().catch(err => console.error('Notification sync error:', err));
+            };
+            notifyOthers().catch(err => console.error('Notification error:', err));
+        }
 
         res.status(201).json(fullChat);
     } catch (error) {

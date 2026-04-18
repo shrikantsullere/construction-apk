@@ -8,6 +8,7 @@ export const ChatTab = ({ project }) => {
     const { messages, sendMessage, fetchMessages, user } = useApp();
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
+    const [unauthorized, setUnauthorized] = useState(false);
     const flatListRef = useRef();
 
     const targetId = (project._id || project.id)?.toString();
@@ -16,9 +17,14 @@ export const ChatTab = ({ project }) => {
         const load = async () => {
             if (!targetId) return;
             setLoading(true);
-            await fetchMessages(targetId, 'project');
+            const res = await fetchMessages(targetId, 'project');
             setLoading(false);
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+            if (res?.unauthorized) {
+                setUnauthorized(true);
+            } else {
+                setUnauthorized(false);
+                setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+            }
         };
         load();
     }, [targetId]);
@@ -27,6 +33,16 @@ export const ChatTab = ({ project }) => {
         const mProjId = m.projectId?.toString();
         return mProjId === targetId;
     }).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    if (unauthorized) {
+        return (
+            <View style={styles.center}>
+                <MaterialCommunityIcons name="lock-outline" size={64} color={COLORS.textSecondary} />
+                <Text style={styles.restrictedTitle}>Restricted Discussion</Text>
+                <Text style={styles.restrictedText}>This channel is limited to project stakeholders. Please contact the site manager for access.</Text>
+            </View>
+        );
+    }
 
     const handleSend = async () => {
         if (!text.trim()) return;
@@ -95,6 +111,27 @@ const styles = StyleSheet.create({
     },
     list: {
         padding: SPACING.m,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    restrictedTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: COLORS.textPrimary,
+        marginTop: 20,
+        textAlign: 'center',
+    },
+    restrictedText: {
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        marginTop: 10,
+        lineHeight: 20,
+        fontWeight: '600',
     },
     messageWrapper: {
         marginBottom: 16,

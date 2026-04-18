@@ -5,9 +5,12 @@ import { COLORS, SHADOWS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 
-const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBranding = true, showRight = true }) => {
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBranding = true, showRight = true, rightComponent = null }) => {
     const { user, projects, notifications, markNotificationAsRead, unreadChatCount } = useApp();
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const [isSearching, setIsSearching] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isNotifying, setIsNotifying] = useState(false);
@@ -56,7 +59,7 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
     };
 
     return (
-        <View style={styles.headerContainer}>
+        <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 20) }]}>
             {/* TOP ROW */}
             <View style={styles.topRow}>
                 <View style={styles.leftSection}>
@@ -68,11 +71,6 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                             >
                                 <MaterialCommunityIcons name="arrow-left" size={20} color="#FFFFFF" />
                             </TouchableOpacity>
-                            {title && (
-                                <View style={styles.headerAvatarMini}>
-                                    <Text style={styles.headerAvatarText}>{title.charAt(0)}</Text>
-                                </View>
-                            )}
                         </View>
                     ) : (
                         (user?.role === 'FOREMAN' || user?.role === 'PM' || user?.role === 'CLIENT' || user?.role === 'SUBCONTRACTOR' || user?.role === 'WORKER') && (
@@ -80,9 +78,23 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                                 style={styles.menuBtn}
                                 onPress={() => {
                                     try {
-                                        navigation.dispatch(DrawerActions.openDrawer());
+                                        // Standard drawer opening attempt
+                                        if (typeof navigation.openDrawer === 'function') {
+                                            navigation.openDrawer();
+                                        } 
+                                        else if (typeof navigation.toggleDrawer === 'function') {
+                                            navigation.toggleDrawer();
+                                        }
+                                        else {
+                                            const parent = navigation.getParent();
+                                            if (parent && typeof parent.openDrawer === 'function') {
+                                                parent.openDrawer();
+                                            } else {
+                                                navigation.dispatch(DrawerActions.toggleDrawer());
+                                            }
+                                        }
                                     } catch (e) {
-                                        navigation.navigate('MainTabs');
+                                        console.warn('-- DRAWER OPEN FAILED --', e.message);
                                     }
                                 }}
                             >
@@ -97,46 +109,55 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                         {title ? (
                             <Text style={styles.brandTitle} numberOfLines={1}>{title}</Text>
                         ) : (
-                            <Text style={styles.orgLabel}>Organization</Text>
+                            <>
+                                <Text style={styles.orgLabel}>Organization</Text>
+                                <Text style={styles.brandTitle}>KAAL Construction</Text>
+                            </>
                         )}
                     </View>
                 )}
 
-                {showRight && (
-                    <View style={styles.iconSection}>
-                        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Chatboard')}>
-                            <View style={styles.notificationWrapper}>
-                                <MaterialCommunityIcons name="chat-outline" size={24} color="#64748B" />
-                                {unreadChatCount > 0 && (
-                                    <View style={[styles.badge, { backgroundColor: '#3B82F6' }]}>
-                                        <Text style={styles.badgeText}>{unreadChatCount}</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.iconBtn} onPress={() => setIsNotifying(true)}>
-                            <View style={styles.notificationWrapper}>
-                                <MaterialCommunityIcons name="bell-outline" size={24} color="#64748B" />
-                                {unreadCount > 0 && (
-                                    <View style={styles.badge}>
-                                        <Text style={styles.badgeText}>{unreadCount}</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.avatarContainer}
-                            onPress={() => navigation.navigate('Profile')}
-                        >
-                            <View style={styles.avatarInner}>
-                                <Text style={styles.avatarText}>
-                                    {(user?.fullName || user?.name || user?.role || 'U')[0].toUpperCase()}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
+                {rightComponent ? (
+                    <View style={styles.customRightSection}>
+                        {rightComponent}
                     </View>
+                ) : (
+                    showRight && (
+                        <View style={styles.iconSection}>
+                            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Chatboard')}>
+                                <View style={styles.notificationWrapper}>
+                                    <MaterialCommunityIcons name="chat-outline" size={24} color="#64748B" />
+                                    {unreadChatCount > 0 && (
+                                        <View style={[styles.badge, { backgroundColor: '#3B82F6' }]}>
+                                            <Text style={styles.badgeText}>{unreadChatCount}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.iconBtn} onPress={() => setIsNotifying(true)}>
+                                <View style={styles.notificationWrapper}>
+                                    <MaterialCommunityIcons name="bell-outline" size={24} color="#64748B" />
+                                    {unreadCount > 0 && (
+                                        <View style={styles.badge}>
+                                            <Text style={styles.badgeText}>{unreadCount}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.avatarContainer}
+                                onPress={() => navigation.navigate('Profile')}
+                            >
+                                <View style={styles.avatarInner}>
+                                    <Text style={styles.avatarText}>
+                                        {(user?.fullName || user?.name || user?.role || 'U')[0].toUpperCase()}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )
                 )}
             </View>
 
@@ -294,11 +315,14 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                             onPress={() => {
                                 setIsSearching(false);
                                 setSearchQuery('');
-                                // Navigate to Jobs tab (Foreman's project list) inside MainTabs
+                                
+                                // Subcontractors and Clients use "Projects" tab; Workers and Foremen use "Jobs"
+                                const targetTab = (user?.role === 'SUBCONTRACTOR' || user?.role === 'CLIENT') ? 'Projects' : 'Jobs';
+                                
                                 try {
-                                    navigation.navigate('MainTabs', { screen: 'Jobs' });
+                                    navigation.navigate('MainTabs', { screen: targetTab });
                                 } catch (e) {
-                                    console.warn('Navigation to Jobs failed:', e.message);
+                                    console.warn(`Navigation to ${targetTab} failed:`, e.message);
                                 }
                             }}
                         >
@@ -314,7 +338,6 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
 const styles = StyleSheet.create({
     headerContainer: {
         backgroundColor: '#FFFFFF',
-        paddingTop: Platform.OS === 'ios' ? 44 : 32,
         paddingBottom: 8,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
@@ -426,6 +449,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         width: Platform.OS === 'ios' ? 110 : (Dimensions.get('window').width < 360 ? 90 : 105),
         justifyContent: 'flex-end',
+    },
+    customRightSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        minWidth: 80,
     },
     iconBtn: {
         padding: 4,

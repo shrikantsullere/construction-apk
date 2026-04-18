@@ -5,10 +5,12 @@ import { COLORS, SHADOWS, SPACING } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AppHeader = ({ title, showBack = false, showRight = true, showLogo = false }) => {
     const { user, logout } = useApp();
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
 
     const handleLogout = async () => {
         await logout();
@@ -18,7 +20,7 @@ const AppHeader = ({ title, showBack = false, showRight = true, showLogo = false
     };
 
     return (
-        <View style={styles.safeArea}>
+        <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, 20) }]}>
             <View style={styles.headerContainer}>
                 <View style={styles.leftSection}>
                      {showBack ? (
@@ -26,11 +28,6 @@ const AppHeader = ({ title, showBack = false, showRight = true, showLogo = false
                             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
                                 <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.primary} />
                             </TouchableOpacity>
-                            {title && (
-                                <View style={styles.headerAvatarMini}>
-                                    <Text style={styles.headerAvatarText}>{title.charAt(0)}</Text>
-                                </View>
-                            )}
                         </View>
                     ) : (
                         <Image 
@@ -93,7 +90,6 @@ const AppHeader = ({ title, showBack = false, showRight = true, showLogo = false
 const styles = StyleSheet.create({
     safeArea: {
         backgroundColor: '#FFFFFF',
-        paddingTop: Platform.OS === 'ios' ? 44 : 36,
     },
     headerContainer: {
         height: 64,

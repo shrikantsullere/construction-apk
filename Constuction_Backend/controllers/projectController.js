@@ -18,7 +18,7 @@ const getProjects = async (req, res, next) => {
             delete query.companyId;
         }
 
-        if (['PM', 'FOREMAN', 'WORKER'].includes(role)) {
+        if (['PM', 'FOREMAN', 'WORKER', 'SUBCONTRACTOR'].includes(role)) {
             
             const jobFilter = { 
                 companyId,
@@ -55,7 +55,7 @@ const getProjects = async (req, res, next) => {
 
         // Optimization: Select only necessary fields for the list view
         const projects = await Project.find(query)
-            .select('name status pmId clientId createdAt budget image currentPhase location siteLatitude siteLongitude')
+            .select('name status pmId clientId createdAt budget image currentPhase location siteLatitude siteLongitude progress')
             .populate('clientId', 'fullName email')
             .populate('pmId', 'fullName email')
             .sort({ createdAt: -1 })

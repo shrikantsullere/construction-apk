@@ -9,7 +9,7 @@ import { useApp } from '../../context/AppContext';
 
 const { width } = Dimensions.get('window');
 
-const SubcontractorDashboard = ({ navigation, timer, isClockedIn, handleClockToggle, setClockModal, selectedProject }) => {
+const SubcontractorDashboard = ({ navigation, timer, isClockedIn, isClocking, handleClockToggle, setClockModal, selectedProject }) => {
     const {
         user, metrics,
         teamMembers, todos, addTodo, toggleTodo, deleteTodo,
@@ -65,10 +65,15 @@ const SubcontractorDashboard = ({ navigation, timer, isClockedIn, handleClockTog
                     <Text style={styles.timerSub}>{isClockedIn ? 'Session Recording' : 'Not Active'}</Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.clockBtn, { backgroundColor: isClockedIn ? '#475569' : '#0F172A' }]}
+                    style={[styles.clockBtn, { backgroundColor: isClockedIn ? '#475569' : '#0F172A' }, isClocking && { opacity: 0.7 }]}
                     onPress={() => !isClockedIn ? setClockModal(true) : handleClockToggle(selectedProject?._id)}
+                    disabled={isClocking}
                 >
-                    <Text style={styles.clockBtnTxt}>{isClockedIn ? 'END CLOCK SESSION' : 'START CLOCK IN'}</Text>
+                    {isClocking ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                        <Text style={styles.clockBtnTxt}>{isClockedIn ? 'END CLOCK SESSION' : 'START CLOCK IN'}</Text>
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -103,11 +108,18 @@ const SubcontractorDashboard = ({ navigation, timer, isClockedIn, handleClockTog
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.actionsRow}>
                 <TouchableOpacity
-                    style={[styles.actionPrimary, SHADOWS.small]}
+                    style={[styles.actionPrimary, SHADOWS.small, isClocking && { opacity: 0.7 }]}
                     onPress={() => setClockModal(true)}
+                    disabled={isClocking}
                 >
-                    <MaterialCommunityIcons name="clock-check" size={18} color="#fff" />
-                    <Text style={styles.actionPrimaryTxt}>Start Clock In</Text>
+                    {isClocking ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                        <>
+                            <MaterialCommunityIcons name="clock-check" size={18} color="#fff" />
+                            <Text style={styles.actionPrimaryTxt}>Start Clock In</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.actionSecondary, SHADOWS.small]}
@@ -201,8 +213,8 @@ const SubcontractorDashboard = ({ navigation, timer, isClockedIn, handleClockTog
                         <Text style={styles.tasksCardTitle}>Assigned Tasks</Text>
                         <Text style={styles.tasksCardSub}>{pendingTasks.length} Pending Tasks</Text>
                     </View>
-                    <TouchableOpacity onPress={() => navigation.navigate('Jobs')}>
-                        <Text style={styles.linkTxt}>VIEW JOBS</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('Projects')}>
+                        <Text style={styles.linkTxt}>VIEW PROJECTS</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -239,7 +251,7 @@ const SubcontractorDashboard = ({ navigation, timer, isClockedIn, handleClockTog
             <View style={[styles.card, { padding: 20 }, SHADOWS.small]}>
                 <View style={styles.sectionHeadRow}>
                     <Text style={styles.cardTitle}>My Recent Activity</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('RFIDashboard')}>
+                    <TouchableOpacity onPress={() => navigation.navigate('RFI')}>
                         <Text style={styles.linkTxt}>VIEW FULL HISTORY</Text>
                     </TouchableOpacity>
                 </View>
@@ -272,7 +284,7 @@ const SubcontractorDashboard = ({ navigation, timer, isClockedIn, handleClockTog
                 <View style={styles.alertStack}>
                     <TouchableOpacity
                         style={[styles.alertBar, { backgroundColor: '#EF4444' }]}
-                        onPress={() => navigation.navigate('ForemanTasks')}
+                        onPress={() => navigation.navigate('Tasks')}
                     >
                         <View style={styles.alertNumBox}>
                             <Text style={styles.alertNum}>{overdueTasks.length}</Text>
@@ -350,11 +362,11 @@ const styles = StyleSheet.create({
     clockBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.8 },
 
     // Metrics
-    metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-    metricBox: { flex: 1, backgroundColor: '#fff', padding: 12, borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center' },
+    metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 28 },
+    metricBox: { width: '31.5%', minWidth: 100, backgroundColor: '#fff', padding: 12, borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center' },
     metricIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
-    metricVal: { fontSize: 16, fontWeight: '900', color: '#0F172A', textAlign: 'center' },
-    metricLab: { fontSize: 9, fontWeight: '700', color: '#94A3B8', textAlign: 'center', marginTop: 2 },
+    metricVal: { fontSize: 13, fontWeight: '900', color: '#0F172A', textAlign: 'center' },
+    metricLab: { fontSize: 8, fontWeight: '700', color: '#94A3B8', textAlign: 'center', marginTop: 2 },
 
     // Actions
     sectionTitle: { fontSize: 12, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },

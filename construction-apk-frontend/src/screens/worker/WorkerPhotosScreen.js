@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Dimensions, ActivityIndicator, Alert, Modal, TextInput, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+    Image, Dimensions, ActivityIndicator, Alert, Modal, 
+    TextInput, Platform, ScrollView, Animated, SafeAreaView 
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../../constants/theme';
@@ -8,25 +12,36 @@ import api, { getServerUrl } from '../../utils/api';
 import { useApp } from '../../context/AppContext';
 
 const { width } = Dimensions.get('window');
+const COLUMN_WIDTH = (width - 48) / 2;
 
 const WorkerPhotosScreen = () => {
-    const { projects } = useApp();
+    const { projects, user } = useApp();
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    
+    // Filtering
+    const [activeFilter, setActiveFilter] = useState('All');
+    const [filteredPhotos, setFilteredPhotos] = useState([]);
 
-    // For Description Modal
-    const [descModal, setDescModal] = useState(false);
+    // For Description/Upload Modal
+    const [uploadModal, setUploadModal] = useState(false);
+    const [previewModal, setPreviewModal] = useState(false);
+    const [selectedPhoto, setSelectedPhoto] = useState(null);
+    
     const [tempImage, setTempImage] = useState(null);
     const [description, setDescription] = useState('');
-    const [selectedProjectId, setSelectedProjectId] = useState(null);
+    const [targetProjectId, setTargetProjectId] = useState(null);
+
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const fetchPhotos = async () => {
         try {
             setLoading(true);
             const res = await api.get('/photos');
-            console.log('Fetched photos:', res.data?.length);
             setPhotos(res.data);
+            setFilteredPhotos(res.data);
+            Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
         } catch (e) {
             console.error('Fetch photos error:', e.response?.data || e.message);
         } finally {
@@ -37,169 +52,306 @@ const WorkerPhotosScreen = () => {
     useEffect(() => {
         fetchPhotos();
         if (projects && projects.length > 0) {
-            setSelectedProjectId(projects[0]._id || projects[0].id);
+            setTargetProjectId(projects[0]._id || projects[0].id);
         }
     }, [projects]);
 
-    const handleUploadOptions = () => {
-        Alert.alert(
-            'Upload Photo',
-            'How would you like to add a photo?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Take a Photo', onPress: capturePhoto },
-                { text: 'Choose from Gallery', onPress: pickImage }
-            ]
-        );
-    };
-
-    const capturePhoto = async () => {
-        try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Camera permission is required!');
-                return;
-            }
-
-            let result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaType.Images,
-                allowsEditing: true,
-                quality: 0.8,
-            });
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setTempImage(result.assets[0].uri);
-                setDescription('');
-                setDescModal(true);
-            }
-        } catch (error) {
-            console.error('Camera error:', error);
-            Alert.alert('Error', 'There was an issue opening the camera.');
+    useEffect(() => {
+        if (activeFilter === 'All') {
+            setFilteredPhotos(photos);
+        } else {
+            setFilteredPhotos(photos.filter(p => p.projectId?._id === activeFilter || p.projectId === activeFilter));
         }
-    };
+    }, [activeFilter, photos]);
 
-    const pickImage = async () => {
+    const handlePick = async (mode) => {
         try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Gallery permission is required!');
+            const hasPermission = mode === 'camera' 
+                ? (await ImagePicker.requestCameraPermissionsAsync()).status === 'granted'
+                : (await ImagePicker.requestMediaLibraryPermissionsAsync()).status === 'granted';
+
+            if (!hasPermission) {
+                Alert.alert('Permission Denied', `${mode === 'camera' ? 'Camera' : 'Gallery'} permission is required.`);
                 return;
             }
 
-            let result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaType.Images,
-                allowsEditing: true,
-                quality: 0.8,
-            });
+            const result = mode === 'camera' 
+                ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 })
+                : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.7 });
 
-            if (!result.canceled && result.assets && result.assets.length > 0) {
+            if (!result.canceled) {
                 setTempImage(result.assets[0].uri);
-                setDescription('');
-                setDescModal(true);
+                setUploadModal(true);
             }
-        } catch (error) {
-            console.error('Gallery error:', error);
-            Alert.alert('Error', 'There was an issue opening the gallery.');
+        } catch (err) {
+            Alert.alert('Error', 'Failed to acquire image');
         }
     };
 
     const uploadImage = async () => {
-        if (!tempImage) return;
-        if (!selectedProjectId) {
-            Alert.alert('Required', 'Please select a project before uploading.');
+        if (!tempImage || !targetProjectId) {
+            Alert.alert('Required', 'Please select a project and image');
             return;
         }
 
-        const localUri = tempImage;
-        const note = description || 'Site Progress Photo';
-
         try {
             setUploading(true);
-            setDescModal(false);
-            console.log('Starting upload for:', localUri);
-
             const formData = new FormData();
             formData.append('image', {
-                uri: Platform.OS === 'android' ? localUri : localUri.replace('file://', ''),
-                name: localUri.split('/').pop() || 'photo.jpg',
+                uri: Platform.OS === 'android' ? tempImage : tempImage.replace('file://', ''),
+                name: `site_photo_${Date.now()}.jpg`,
                 type: 'image/jpeg'
             });
-            formData.append('description', note);
-            formData.append('projectId', selectedProjectId);
+            formData.append('description', description || 'Site Progress Photo');
+            formData.append('projectId', targetProjectId);
 
             const res = await api.post('/photos/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            console.log('Upload success:', res.data?._id);
-
-            // PREPEND to state immediately so it shows up at the top
             setPhotos(prev => [res.data, ...prev]);
-
-            Alert.alert('Success', 'Photo uploaded successfully!');
-        } catch (error) {
-            console.error('Image upload error:', error.response?.data || error.message);
-            Alert.alert('Upload Failed', 'Backend Error: ' + (error.response?.data?.message || 'Check connection'));
-        } finally {
-            setUploading(false);
+            setUploadModal(false);
             setTempImage(null);
             setDescription('');
+            Alert.alert('Success', 'Photo uploaded to site gallery.');
+        } catch (error) {
+            Alert.alert('Upload Failed', error.response?.data?.message || 'Server connection error');
+        } finally {
+            setUploading(false);
         }
     };
 
-    return (
-        <View style={styles.container}>
-            <WorkerHeader title="Site Photos & Media" />
-
-            <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons name="camera-outline" size={80} color="#E2E8F0" />
-                <Text style={styles.emptyTitle}>Site Photos</Text>
-                <Text style={styles.emptySubtitle}>Content is being updated by the Project Manager.</Text>
+    const renderHeader = () => (
+        <View style={styles.headerTop}>
+            <View style={styles.subHeaderRow}>
+                <View style={styles.titleSection}>
+                    <Text style={styles.headerTitle}>Site Photos</Text>
+                    <Text style={styles.headerLabel}>PROJECT DOCUMENTATION</Text>
+                </View>
+                <TouchableOpacity 
+                    style={styles.pageUploadBtn} 
+                    onPress={() => Alert.alert('Upload Media', 'Select source', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Camera', onPress: () => handlePick('camera') },
+                        { text: 'Gallery', onPress: () => handlePick('library') },
+                    ])}
+                >
+                    <MaterialCommunityIcons name="plus-circle" size={18} color="#fff" />
+                    <Text style={styles.pageUploadBtnText}>Upload New</Text>
+                </TouchableOpacity>
             </View>
+            
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
+                <TouchableOpacity 
+                    style={[styles.filterChip, activeFilter === 'All' && styles.filterChipActive]}
+                    onPress={() => setActiveFilter('All')}
+                >
+                    <Text style={[styles.filterText, activeFilter === 'All' && styles.filterTextActive]}>All Projects</Text>
+                </TouchableOpacity>
+                {projects.map(p => (
+                    <TouchableOpacity 
+                        key={p._id || p.id}
+                        style={[styles.filterChip, activeFilter === (p._id || p.id) && styles.filterChipActive]}
+                        onPress={() => setActiveFilter(p._id || p.id)}
+                    >
+                        <Text style={[styles.filterText, activeFilter === (p._id || p.id) && styles.filterTextActive]}>{p.name}</Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
         </View>
+    );
+
+    const renderPhoto = ({ item }) => (
+        <TouchableOpacity 
+            style={styles.photoCard} 
+            activeOpacity={0.9}
+            onPress={() => { setSelectedPhoto(item); setPreviewModal(true); }}
+        >
+            <Image source={{ uri: getServerUrl(item.imageUrl) }} style={styles.photoImg} />
+            <View style={styles.photoOverlay}>
+                <View style={styles.projectTag}>
+                    <Text style={styles.projectTagText} numberOfLines={1}>{item.projectId?.name || 'General'}</Text>
+                </View>
+            </View>
+            <View style={styles.photoInfo}>
+                <Text style={styles.photoDesc} numberOfLines={1}>{item.description || 'No description'}</Text>
+                <Text style={styles.photoDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+            </View>
+        </TouchableOpacity>
+    );
+
+    return (
+        <SafeAreaView style={styles.container}>
+            <WorkerHeader 
+                hideSearch={true} 
+                title="Site Photos" 
+            />
+            
+            {loading ? (
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={styles.loadingText}>Synchronizing Media...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={filteredPhotos}
+                    keyExtractor={item => item._id || item.id}
+                    renderItem={renderPhoto}
+                    numColumns={2}
+                    ListHeaderComponent={renderHeader}
+                    contentContainerStyle={styles.listContainer}
+                    columnWrapperStyle={styles.row}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <MaterialCommunityIcons name="image-off-outline" size={60} color="#E2E8F0" />
+                            <Text style={styles.emptyText}>No photos found for this site.</Text>
+                        </View>
+                    }
+                />
+            )}
+
+            {/* UPLOAD MODAL */}
+            <Modal visible={uploadModal} animationType="slide" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Upload to Site</Text>
+                            <TouchableOpacity onPress={() => setUploadModal(false)}>
+                                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Image source={{ uri: tempImage }} style={styles.previewThumb} />
+
+                        <Text style={styles.inputLabel}>SELECT PROJECT</Text>
+                        <View style={styles.pickerContainer}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
+                                {projects.map(p => (
+                                    <TouchableOpacity 
+                                        key={p._id || p.id}
+                                        style={[styles.projChip, targetProjectId === (p._id || p.id) && styles.projChipActive]}
+                                        onPress={() => setTargetProjectId(p._id || p.id)}
+                                    >
+                                        <Text style={[styles.projChipText, targetProjectId === (p._id || p.id) && styles.projChipActiveText]}>{p.name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+
+                        <Text style={styles.inputLabel}>DESCRIPTION / NOTES</Text>
+                        <TextInput 
+                            style={styles.input}
+                            placeholder="Add site context..."
+                            value={description}
+                            onChangeText={setDescription}
+                            multiline
+                        />
+
+                        <TouchableOpacity 
+                            style={[styles.mainUploadBtn, uploading && { opacity: 0.7 }]}
+                            onPress={uploadImage}
+                            disabled={uploading}
+                        >
+                            {uploading ? <ActivityIndicator color="#fff" /> : <Text style={styles.mainUploadBtnText}>CONFIRM UPLOAD</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* PREVIEW MODAL */}
+            <Modal visible={previewModal} transparent animationType="fade">
+                <View style={styles.fullPreviewOverlay}>
+                    <TouchableOpacity style={styles.closeFull} onPress={() => setPreviewModal(false)}>
+                        <MaterialCommunityIcons name="close" size={30} color="#fff" />
+                    </TouchableOpacity>
+                    {selectedPhoto && (
+                        <View style={styles.fullContent}>
+                            <Image source={{ uri: getServerUrl(selectedPhoto.imageUrl) }} style={styles.fullImage} resizeMode="contain" />
+                            <View style={styles.fullFooter}>
+                                <Text style={styles.fullProjName}>{selectedPhoto.projectId?.name || 'General Site'}</Text>
+                                <Text style={styles.fullDesc}>{selectedPhoto.description}</Text>
+                                <Text style={styles.fullMeta}>Uploaded by {selectedPhoto.uploadedBy?.fullName || 'Worker'} on {new Date(selectedPhoto.createdAt).toLocaleDateString()}</Text>
+                            </View>
+                        </View>
+                    )}
+                </View>
+            </Modal>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    header: { paddingHorizontal: 20, paddingTop: 10, marginBottom: 10 },
-    brandingRow: { marginBottom: 16 },
-    mainSubtitle: { fontSize: 24, fontWeight: '900', color: '#2563EB', letterSpacing: 1.5, marginTop: 4, textTransform: 'uppercase' },
-    list: { padding: 16, paddingBottom: 120 },
-    photoCard: {
-        width: (width - 48) / 2,
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        marginBottom: 16,
-        overflow: 'hidden',
-        marginHorizontal: 4
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    listContainer: { paddingBottom: 100 },
+    headerTop: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    subHeader: { marginBottom: 15 },
+    headerTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    headerLabel: { fontSize: 10, fontWeight: '900', color: '#2563EB', letterSpacing: 1.5, marginTop: 2 },
+    filterBar: { paddingVertical: 5 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+    filterChipActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+    filterText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
+    filterTextActive: { color: '#fff' },
+    row: { justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 16 },
+    subHeaderRow: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: 15
     },
-    photoImg: { width: '100%', height: 160, backgroundColor: '#F1F5F9' },
-    photoBody: { padding: 12 },
-    photoTitle: { fontSize: 13, fontWeight: '800', color: COLORS.textPrimary },
-    photoMeta: { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, marginTop: 4, textTransform: 'uppercase' },
-    fab: { position: 'absolute', bottom: 30, right: 30, width: 68, height: 68, borderRadius: 34, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', elevation: 12 },
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 100 },
-    emptyTitle: { fontSize: 24, fontWeight: '900', color: '#1E293B', marginTop: 16 },
-    emptySubtitle: { fontSize: 14, fontWeight: '600', color: '#94A3B8', textAlign: 'center', marginTop: 8 },
+    titleSection: { flex: 1 },
+    pageUploadBtn: {
+        backgroundColor: '#2563EB',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 12,
+        gap: 8,
+        ...SHADOWS.small
+    },
+    pageUploadBtnText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '900',
+    },
+    photoCard: { width: COLUMN_WIDTH, backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', ...SHADOWS.small, borderWidth: 1, borderColor: '#F1F5F9' },
+    photoImg: { width: '100%', height: COLUMN_WIDTH, backgroundColor: '#F1F5F9' },
+    photoOverlay: { position: 'absolute', top: 10, left: 10 },
+    projectTag: { backgroundColor: 'rgba(15, 23, 42, 0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    projectTagText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+    photoInfo: { padding: 12 },
+    photoDesc: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
+    photoDate: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 4 },
+    loadingText: { marginTop: 15, fontSize: 13, fontWeight: '700', color: '#64748B' },
+    emptyState: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
+    emptyText: { marginTop: 12, fontSize: 14, fontWeight: '700', color: '#94A3B8', textAlign: 'center' },
 
-    // Modal Styles
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: '#fff', borderRadius: 32, padding: 24, alignItems: 'center' },
-    modalTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B', marginBottom: 12 },
-    previewImage: { width: '100%', height: 180, borderRadius: 20, marginBottom: 16 },
-    modalLabel: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-    projectList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, width: '100%' },
-    projectItem: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-    projectItemActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-    projectItemText: { fontSize: 11, fontWeight: '700', color: '#475569' },
-    projectItemTextActive: { color: '#fff' },
-    descInput: { width: '100%', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, fontSize: 13, color: '#1E293B', height: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E2E8F0' },
-    modalActions: { flexDirection: 'row', gap: 12, marginTop: 20, width: '100%' },
-    cancelBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
-    cancelBtnText: { color: '#64748B', fontWeight: '800' },
-    uploadBtn: { flex: 2, backgroundColor: COLORS.primary, paddingVertical: 14, borderRadius: 16, alignItems: 'center', elevation: 4 },
-    uploadBtnText: { color: '#fff', fontWeight: '900', fontSize: 15 }
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, minHeight: '60%' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+    previewThumb: { width: '100%', height: 180, borderRadius: 20, marginBottom: 20 },
+    inputLabel: { fontSize: 10, fontWeight: '900', color: '#94A3B8', letterSpacing: 1, marginBottom: 10 },
+    projChip: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F8FAFC', marginRight: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    projChipActive: { backgroundColor: '#EFF6FF', borderColor: '#2563EB' },
+    projChipText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+    projChipActiveText: { color: '#2563EB' },
+    input: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 15, fontSize: 15, color: '#0F172A', height: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 5, marginBottom: 20 },
+    mainUploadBtn: { backgroundColor: '#2563EB', paddingVertical: 18, borderRadius: 18, alignItems: 'center', ...SHADOWS.small },
+    mainUploadBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+
+    // Full Preview
+    fullPreviewOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
+    closeFull: { position: 'absolute', top: 50, right: 20, zIndex: 100 },
+    fullContent: { flex: 1, justifyContent: 'center' },
+    fullImage: { width: '100%', height: '70%' },
+    fullFooter: { position: 'absolute', bottom: 40, left: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.5)', padding: 20, borderRadius: 20 },
+    fullProjName: { fontSize: 12, fontWeight: '900', color: '#2563EB', textTransform: 'uppercase' },
+    fullDesc: { fontSize: 18, fontWeight: '800', color: '#fff', marginTop: 5 },
+    fullMeta: { fontSize: 11, fontWeight: '700', color: '#94A3B8', marginTop: 10 }
 });
 
 export default WorkerPhotosScreen;

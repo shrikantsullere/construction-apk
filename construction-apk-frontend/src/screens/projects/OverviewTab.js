@@ -142,12 +142,12 @@ const styles = StyleSheet.create({
     dateDivider: { width: 1, height: 14, backgroundColor: '#E2E8F0' },
 
     // KPI Grid
-    kpiGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-    statHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-    statIconBox: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    statLabel: { fontSize: 9, fontWeight: '900', color: '#64748B', letterSpacing: 0.5 },
-    statVal: { fontSize: 16, fontWeight: '900' },
+    kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
+    statCard: { width: '31.3%', minWidth: 90, backgroundColor: '#fff', borderRadius: 24, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    statHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+    statIconBox: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    statLabel: { fontSize: 8, fontWeight: '900', color: '#64748B', letterSpacing: 0.5 },
+    statVal: { fontSize: 14, fontWeight: '900' },
 
     // Section Header
     sectionHeader: { marginBottom: 16, borderLeftWidth: 3, borderColor: COLORS.primary, paddingLeft: 12 },

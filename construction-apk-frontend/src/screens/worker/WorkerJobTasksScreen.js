@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Animated, ActivityIndicator, Dimensions } from 'react-native';
+import { 
+    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+    TextInput, Animated, ActivityIndicator, Dimensions, 
+    SafeAreaView, StatusBar 
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, SHADOWS, SIZES } from '../../constants/theme';
-import AppHeader from '../../components/AppHeader';
+import { COLORS, SHADOWS } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
-import { Card, Badge } from '../../components/shared/CommonUI';
+import { Card } from '../../components/shared/CommonUI';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const WorkerJobTasksScreen = ({ navigation, route }) => {
     const { jobId } = route.params || {};
-    const { tasks, jobs, updateTask, refreshData, user } = useApp();
-    const [loading, setLoading] = useState(false);
+    const { tasks, jobs, refreshData, user, updateTask } = useApp();
+    const insets = useSafeAreaInsets();
     const [search, setSearch] = useState('');
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -33,126 +37,125 @@ const WorkerJobTasksScreen = ({ navigation, route }) => {
         return isAssigned && matchesJob && matchesSearch;
     });
 
-    const completedCount = jobTasks.filter(t => t.status === 'completed').length;
-    const totalCount = jobTasks.length;
-    const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    // Stats as per software screenshot
+    const overdueCount = jobTasks.filter(t => {
+        if (!t.dueDate || t.status === 'completed') return false;
+        return new Date(t.dueDate) < new Date();
+    }).length;
+    const activeCount = jobTasks.filter(t => t.status === 'active' || t.status === 'in_progress').length;
+    const doneCount = jobTasks.filter(t => t.status === 'completed').length;
 
-    const renderSummaryCard = (icon, title, value, color) => (
-        <Card style={styles.summaryCard}>
-            <View style={[styles.summaryIconBox, { backgroundColor: color + '10' }]}>
-                {title === 'GLOBAL PROGRESS' ? (
-                    <View style={styles.progressCircleSmall}>
-                        <Text style={[styles.progressCircleText, { color }]}>{progress}%</Text>
+    const renderTaskItem = ({ item }) => {
+        const progress = item.status === 'completed' ? 100 : (item.status === 'active' || item.status === 'in_progress' ? 40 : 0);
+        const priorityColor = (item.priority || '').toLowerCase() === 'high' ? '#EF4444' : (item.priority || '').toLowerCase() === 'medium' ? '#F97316' : '#2563EB';
+
+        return (
+            <Card style={styles.taskCard} onPress={() => navigation.navigate('TaskDetail', { taskId: item._id || item.id })}>
+                <View style={styles.cardHeader}>
+                    <View style={{ flex: 1 }}>
+                        <View style={styles.titleRow}>
+                            <Text style={styles.taskTitle}>{item.title}</Text>
+                        </View>
+                        {/* Inline Progress Bar as per software */}
+                        <View style={styles.inlineProgressContainer}>
+                            <View style={styles.inlineProgressBarBg}>
+                                <View style={[styles.inlineProgressBarFill, { width: `${progress}%` }]} />
+                            </View>
+                            <Text style={styles.inlineProgressText}>{progress}%</Text>
+                        </View>
                     </View>
-                ) : (
-                    <MaterialCommunityIcons name={icon} size={22} color={color} />
-                )}
-            </View>
-            <View style={styles.summaryContent}>
-                <Text style={styles.summaryTitle}>{title}</Text>
-                <Text style={styles.summaryValue}>{value}</Text>
-            </View>
-        </Card>
-    );
 
-    const renderTaskItem = ({ item }) => (
-        <View style={styles.taskRow}>
-            <View style={styles.statusCol}>
-                <TouchableOpacity
-                    onPress={() => toggleStatus(item)}
-                    style={[styles.statusCheck, item.status === 'completed' && styles.statusCheckActive]}
-                >
-                    {item.status === 'completed' && <MaterialCommunityIcons name="check" size={14} color="#fff" />}
+                    <View style={[styles.statusBadge, { backgroundColor: item.status === 'completed' ? '#ECFDF5' : '#EFF6FF' }]}>
+                        <Text style={[styles.statusBadgeText, { color: item.status === 'completed' ? '#10B981' : '#2563EB' }]}>
+                            {(item.status || 'TODO').toUpperCase()}
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={styles.cardDetails}>
+                    <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                            <Text style={styles.detailLabel}>PROJECT</Text>
+                            <Text style={styles.detailValue} numberOfLines={1}>{currentJob.name || 'General Site'}</Text>
+                        </View>
+                        <View style={styles.detailItem}>
+                            <Text style={styles.detailLabel}>ROLE</Text>
+                            <Text style={styles.detailValue}>Worker</Text>
+                        </View>
+                    </View>
+
+                    <View style={[styles.detailRow, { marginTop: 12 }]}>
+                        <View style={styles.detailItem}>
+                            <Text style={styles.detailLabel}>PRIORITY</Text>
+                            <Text style={[styles.detailValue, { color: priorityColor, fontWeight: '900' }]}>
+                                {(item.priority || 'LOW').toUpperCase()}
+                            </Text>
+                        </View>
+                        <View style={styles.detailItem}>
+                            <Text style={styles.detailLabel}>TIMELINE</Text>
+                            <Text style={styles.detailValue}>
+                                {item.startDate ? new Date(item.startDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) : 'ASAP'} - {item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) : 'ASAP'}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+                
+                <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('TaskDetail', { taskId: item._id || item.id })}>
+                    <MaterialCommunityIcons name="eye-outline" size={16} color="#64748B" />
+                    <Text style={styles.actionBtnText}>VIEW DETAILS</Text>
                 </TouchableOpacity>
-            </View>
-
-            <View style={styles.detailsCol}>
-                <Text style={[styles.itemTitle, item.status === 'completed' && styles.strike]}>{item.title}</Text>
-                <Text style={styles.itemSubtitle}>{currentJob.name || 'General Site'}</Text>
-            </View>
-
-            <View style={styles.assigneeCol}>
-                <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>W</Text>
-                </View>
-                <Text style={styles.assigneeName}>Worker</Text>
-            </View>
-
-            <View style={styles.priorityCol}>
-                <View style={[styles.pBadge, { backgroundColor: item.priority === 'High' ? '#FEE2E2' : '#F1F5F9' }]}>
-                    <Text style={[styles.pBadgeText, { color: item.priority === 'High' ? '#EF4444' : '#64748B' }]}>
-                        {(item.priority || 'LOW').toUpperCase()}
-                    </Text>
-                </View>
-            </View>
-
-            <View style={styles.dateCol}>
-                <Text style={styles.dateText}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Soon'}</Text>
-            </View>
-        </View>
-    );
-
-    const toggleStatus = async (task) => {
-        const nextStatus = task.status === 'completed' ? 'todo' : 'completed';
-        setLoading(true);
-        await updateTask(task._id || task.id, { ...task, status: nextStatus });
-        setLoading(false);
+            </Card>
+        );
     };
 
     return (
         <View style={styles.container}>
-            <AppHeader title="Job Tasks" />
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            
+            {/* Header with Back Button */}
+            <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 20) }]}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                    <MaterialCommunityIcons name="arrow-left" size={24} color="#0F172A" />
+                </TouchableOpacity>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.headerTitle}>Task Command Center</Text>
+                    <View style={styles.subtitleRow}>
+                        <MaterialCommunityIcons name="earth" size={10} color="#2563EB" />
+                        <Text style={styles.subtitleText}>TASK TRACKING & ASSIGNMENT</Text>
+                    </View>
+                </View>
+                <View style={{ width: 44 }} />
+            </View>
 
             <View style={styles.content}>
-                <TouchableOpacity style={styles.backLink} onPress={() => navigation.goBack()}>
-                    <MaterialCommunityIcons name="arrow-left" size={16} color="#64748B" />
-                    <Text style={styles.backLinkText}>BACK TO MY JOBS</Text>
-                </TouchableOpacity>
-
-                <View style={styles.jobIdentity}>
-                    <View style={styles.identityTop}>
-                        <Text style={styles.jobName}>{currentJob.name || 'Site Task'}</Text>
-                        <View style={styles.jobStatusBadge}>
-                            <Text style={styles.jobStatusText}>{(currentJob.status || 'PLANNING').toUpperCase()}</Text>
-                        </View>
+                {/* Stats row as per software */}
+                <View style={styles.statsRow}>
+                    <View style={[styles.statBadge, { backgroundColor: '#FEF2F2' }]}>
+                        <View style={[styles.statDot, { backgroundColor: '#EF4444' }]} />
+                        <Text style={[styles.statText, { color: '#EF4444' }]}>{overdueCount} OVERDUE</Text>
                     </View>
-                    <View style={styles.jobLocationRow}>
-                        <MaterialCommunityIcons name="map-marker-outline" size={14} color="#64748B" />
-                        <Text style={styles.jobLocationText}>{currentJob.project?.location || 'Indore'}</Text>
+                    <View style={[styles.statBadge, { backgroundColor: '#EFF6FF' }]}>
+                        <View style={[styles.statDot, { backgroundColor: '#2563EB' }]} />
+                        <Text style={[styles.statText, { color: '#2563EB' }]}>{activeCount} ACTIVE</Text>
+                    </View>
+                    <View style={[styles.statBadge, { backgroundColor: '#ECFDF5' }]}>
+                        <View style={[styles.statDot, { backgroundColor: '#10B981' }]} />
+                        <Text style={[styles.statText, { color: '#10B981' }]}>{doneCount} DONE</Text>
                     </View>
                 </View>
 
-                <View style={styles.summaryRow}>
-                    {renderSummaryCard('circle-slice-8', 'GLOBAL PROGRESS', `${progress}% Complete`, '#2563EB')}
-                    {renderSummaryCard('check-circle-outline', 'TASKS OVERVIEW', `${completedCount} / ${totalCount} Completed`, '#F97316')}
-                    {renderSummaryCard('account-group-outline', 'TEAM ASSIGNED', `${currentJob.assignedWorkers?.length || 0} Workers`, '#10B981')}
-                </View>
-
-                <View style={styles.tabsSection}>
-                    <View style={styles.tabItem}>
-                        <MaterialCommunityIcons name="check-circle-outline" size={16} color="#2563EB" />
-                        <Text style={styles.tabText}>TASKS</Text>
-                    </View>
-                </View>
-
-                <View style={styles.filterArea}>
-                    <View style={styles.taskSearch}>
-                        <MaterialCommunityIcons name="magnify" size={18} color="#94A3B8" />
+                {/* Search Bar */}
+                <View style={styles.searchSection}>
+                    <View style={styles.searchBox}>
+                        <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
                         <TextInput
-                            style={styles.taskInput}
-                            placeholder="Search tasks..."
+                            style={styles.searchInput}
+                            placeholder="Search tasks, projects..."
                             value={search}
                             onChangeText={setSearch}
+                            placeholderTextColor="#94A3B8"
                         />
                     </View>
-                </View>
-
-                <View style={styles.listHeader}>
-                    <Text style={[styles.colLabel, { width: 40 }]}>STATUS</Text>
-                    <Text style={[styles.colLabel, { flex: 1.5 }]}>TASK DETAILS</Text>
-                    <Text style={[styles.colLabel, { flex: 1 }]}>ASSIGNED TO</Text>
-                    <Text style={[styles.colLabel, { width: 70 }]}>PRIORITY</Text>
-                    <Text style={[styles.colLabel, { width: 60 }]}>DUE DATE</Text>
                 </View>
 
                 <Animated.FlatList
@@ -164,79 +167,196 @@ const WorkerJobTasksScreen = ({ navigation, route }) => {
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
                             <MaterialCommunityIcons name="clipboard-check-outline" size={60} color="#E2E8F0" />
-                            <Text style={styles.emptyText}>No tasks found for this job</Text>
+                            <Text style={styles.emptyText}>No tasks found</Text>
                         </View>
                     }
                 />
             </View>
-
-            {loading && (
-                <View style={styles.overlay}>
-                    <ActivityIndicator size="large" color="#2563EB" />
-                </View>
-            )}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    content: { flex: 1, paddingTop: 16 },
-    backLink: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, gap: 6, marginBottom: 12 },
-    backLinkText: { fontSize: 10, fontWeight: '900', color: '#64748B', letterSpacing: 0.5 },
-    jobIdentity: { paddingHorizontal: 24, marginBottom: 24 },
-    identityTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    jobName: { fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
-    jobStatusBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
-    jobStatusText: { fontSize: 9, fontWeight: '900', color: '#475569' },
-    jobLocationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
-    jobLocationText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
-
-    summaryRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 24 },
-    summaryCard: { flex: 1, padding: 12, borderRadius: 20, backgroundColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
-    summaryIconBox: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-    progressCircleSmall: { width: 30, height: 30, borderRadius: 15, borderWidth: 3, borderColor: '#2563EB', justifyContent: 'center', alignItems: 'center' },
-    progressCircleText: { fontSize: 8, fontWeight: '900' },
-    summaryTitle: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 2 },
-    summaryValue: { fontSize: 13, fontWeight: '900', color: '#0F172A' },
-
-    tabsSection: { borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingHorizontal: 24, marginBottom: 20 },
-    tabItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 12, borderBottomWidth: 2, borderBottomColor: '#2563EB', width: 80 },
-    tabText: { fontSize: 11, fontWeight: '900', color: '#2563EB' },
-
-    filterArea: { flexDirection: 'row', paddingHorizontal: 24, gap: 10, marginBottom: 20, alignItems: 'center' },
-    taskSearch: { flex: 1, height: 44, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
-    taskInput: { flex: 1, marginLeft: 8, fontSize: 13, color: '#1E293B', fontWeight: '600' },
-
-    listHeader: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 16 },
-    colLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
-
-    listContainer: { paddingHorizontal: 24, paddingBottom: 100 },
-    taskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    statusCol: { width: 40 },
-    statusCheck: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
-    statusCheckActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
-
-    detailsCol: { flex: 1.5, paddingRight: 12 },
-    itemTitle: { fontSize: 14, fontWeight: '900', color: '#0F172A', marginBottom: 2 },
-    itemSubtitle: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
-    strike: { textDecorationLine: 'line-through', color: '#94A3B8' },
-
-    assigneeCol: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    avatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-    avatarText: { fontSize: 9, fontWeight: '900', color: '#64748B' },
-    assigneeName: { fontSize: 12, fontWeight: '700', color: '#475569' },
-
-    priorityCol: { width: 70 },
-    pBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' },
-    pBadgeText: { fontSize: 9, fontWeight: '900' },
-
-    dateCol: { width: 60 },
-    dateText: { fontSize: 12, fontWeight: '700', color: '#475569' },
-
+    headerBar: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 16, 
+        paddingBottom: 14, 
+        backgroundColor: '#FFFFFF', 
+        borderBottomWidth: 1, 
+        borderBottomColor: '#F1F5F9' 
+    },
+    backBtn: { 
+        width: 44, 
+        height: 44, 
+        borderRadius: 12, 
+        backgroundColor: '#F8FAFC', 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
+    headerTitle: { 
+        fontSize: 18, 
+        fontWeight: '900', 
+        color: '#0F172A', 
+        letterSpacing: -0.3, 
+    },
+    subtitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 1,
+    },
+    subtitleText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#94A3B8',
+        letterSpacing: 0.5,
+    },
+    content: { flex: 1 },
+    statsRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        gap: 8,
+    },
+    statBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 10,
+        gap: 6,
+    },
+    statDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    statText: {
+        fontSize: 8,
+        fontWeight: '900',
+    },
+    searchSection: {
+        paddingHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    searchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        height: 48,
+        borderRadius: 14,
+        paddingHorizontal: 15,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 10,
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    listContainer: {
+        padding: 16,
+        paddingBottom: 100,
+    },
+    taskCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        ...SHADOWS.small,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 16,
+    },
+    taskTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginBottom: 8,
+    },
+    inlineProgressContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    inlineProgressBarBg: {
+        width: 100,
+        height: 4,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    inlineProgressBarFill: {
+        height: '100%',
+        backgroundColor: '#2563EB',
+    },
+    inlineProgressText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#94A3B8',
+    },
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    statusBadgeText: {
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    cardDetails: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    detailItem: {
+        flex: 1,
+    },
+    detailLabel: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#94A3B8',
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    detailValue: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#334155',
+    },
+    actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        marginTop: 4,
+    },
+    actionBtnText: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#64748B',
+        letterSpacing: 0.5,
+    },
     emptyState: { alignItems: 'center', marginTop: 60 },
     emptyText: { marginTop: 12, color: '#94A3B8', fontSize: 14, fontWeight: '700' },
-    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 10 }
 });
 
 export default WorkerJobTasksScreen;
