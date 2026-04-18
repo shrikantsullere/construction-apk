@@ -104,29 +104,7 @@ const ForemanJobsScreen = ({ navigation }) => {
                 </View>
             </View>
 
-            {/* Stats Section */}
-            <View style={styles.statsContainer}>
-                <View style={[styles.statCard, SHADOWS.small]}>
-                    <View style={styles.statIconBox}>
-                        <MaterialCommunityIcons name="trending-up" size={24} color="#2563EB" />
-                    </View>
-                    <View style={styles.statContent}>
-                        <Text style={styles.statLabel}>ACTIVE SITES</Text>
-                        <Text style={styles.statValue}>{stats.active}</Text>
-                        <Text style={styles.statSub}>currently operational</Text>
-                    </View>
-                </View>
-                <View style={[styles.statCard, SHADOWS.small]}>
-                    <View style={[styles.statIconBox, { backgroundColor: '#FFF7ED' }]}>
-                        <MaterialCommunityIcons name="calendar-month" size={24} color="#F97316" />
-                    </View>
-                    <View style={styles.statContent}>
-                        <Text style={styles.statLabel}>PRE-CONSTRUCTION</Text>
-                        <Text style={styles.statValue}>{stats.planning}</Text>
-                        <Text style={styles.statSub}>in planning phase</Text>
-                    </View>
-                </View>
-            </View>
+
 
             {/* Sticky-like Filter Bar */}
             <View style={[styles.filterBar, SHADOWS.small]}>

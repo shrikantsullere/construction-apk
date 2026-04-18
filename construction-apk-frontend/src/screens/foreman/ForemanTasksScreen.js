@@ -218,20 +218,7 @@ const ForemanTasksScreen = ({ navigation }) => {
                     </View>
                 </View>
 
-                <View style={styles.statsBar}>
-                    <View style={[styles.statItem, { backgroundColor: '#FEF2F2' }]}>
-                        <Text style={[styles.statNum, { color: '#EF4444' }]}>{stats.overdue}</Text>
-                        <Text style={[styles.statLabel, { color: '#EF4444' }]}>OVERDUE</Text>
-                    </View>
-                    <View style={[styles.statItem, { backgroundColor: '#EFF6FF' }]}>
-                        <Text style={[styles.statNum, { color: '#2563EB' }]}>{stats.active}</Text>
-                        <Text style={[styles.statLabel, { color: '#2563EB' }]}>ACTIVE</Text>
-                    </View>
-                    <View style={[styles.statItem, { backgroundColor: '#ECFDF5' }]}>
-                        <Text style={[styles.statNum, { color: '#10B981' }]}>{stats.done}</Text>
-                        <Text style={[styles.statLabel, { color: '#10B981' }]}>DONE</Text>
-                    </View>
-                </View>
+
 
                 <View style={styles.stickyActionArea}>
                     <View style={styles.searchBar}>
