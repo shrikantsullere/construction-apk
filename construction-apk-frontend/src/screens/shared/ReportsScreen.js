@@ -7,7 +7,7 @@ import WorkerHeader from '../../components/WorkerHeader';
 
 const { width } = Dimensions.get('window');
 
-const ReportsScreen = () => {
+const ReportsScreen = ({ navigation }) => {
     const { projects, tasks, jobs } = useApp();
 
     const stats = useMemo(() => {
@@ -74,7 +74,7 @@ const ReportsScreen = () => {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
-            <WorkerHeader title="Reports" showBranding={true} />
+            <WorkerHeader title="Reports" showBranding={true} showBack={true} />
             
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 {/* Dashboard Title Section */}
@@ -91,38 +91,7 @@ const ReportsScreen = () => {
 
                 {/* Primary Metrics Grid */}
                 <View style={styles.metricsGrid}>
-                    <StatCard 
-                        label="Overall Progress" 
-                        value={`${stats.progress}%`} 
-                        sub={`${stats.completedTasks} of ${stats.totalTasks} Tasks Done`}
-                        icon="chart-donut"
-                        bg="#EFF6FF"
-                        color="#2563EB"
-                    />
-                    <StatCard 
-                        label="Total Spend" 
-                        value={formatCurrency(stats.totalSpend)} 
-                        sub={`${stats.budgetUsage.toFixed(1)}% of Budget Spent`}
-                        icon="currency-usd"
-                        bg="#F0FDF4"
-                        color="#10B981"
-                    />
-                    <StatCard 
-                        label="Labour Intel" 
-                        value="0.0h" 
-                        sub={`Across ${stats.workers} Workers`}
-                        icon="account-group-outline"
-                        bg="#F5F3FF"
-                        color="#8B5CF6"
-                    />
-                    <StatCard 
-                        label="Remaining Budget" 
-                        value={formatCurrency(stats.totalBudget - stats.totalSpend)} 
-                        sub={`Budget: ${formatCurrency(stats.totalBudget)}`}
-                        icon="wallet-outline"
-                        bg="#FFF7ED"
-                        color="#F97316"
-                    />
+                    {/* Metrics removed as per request */}
                 </View>
 
                 {/* Job Cost Distribution (Visual Placeholder for Chart) */}
@@ -149,28 +118,32 @@ const ReportsScreen = () => {
                     </View>
 
                     {stats.projectJobs.map((job, index) => (
-                        <View key={job._id || index} style={[styles.jobCard, SHADOWS.small]}>
+                        <TouchableOpacity 
+                            key={job._id || index} 
+                            style={[styles.jobCard, SHADOWS.small]}
+                            onPress={() => navigation.navigate('JobTasks', { jobId: job._id })}
+                        >
                             <View style={styles.jobHeader}>
-                                <View>
+                                <View style={{ flex: 1 }}>
                                     <Text style={styles.jobName}>{job.name}</Text>
-                                    <Text style={styles.jobType}>{job.type || 'Operational'}</Text>
+                                    <Text style={styles.jobType}>{job.status?.toUpperCase() || 'ACTIVE'}</Text>
                                 </View>
                                 <View style={styles.progressRing}>
                                     <View style={[styles.dot, { backgroundColor: job.status === 'completed' ? '#10B981' : '#F59E0B' }]} />
-                                    <Text style={styles.progressValue}>0%</Text>
+                                    <Text style={styles.progressValue}>{job.progress || 0}%</Text>
                                 </View>
                             </View>
 
                             <View style={styles.jobTimeline}>
                                 <MaterialCommunityIcons name="calendar-range" size={14} color="#94A3B8" />
                                 <Text style={styles.timelineText}>
-                                    {job.startDate ? new Date(job.startDate).toLocaleDateString('en-GB') : '05/04/2026'} — {job.endDate ? new Date(job.endDate).toLocaleDateString('en-GB') : '10/04/2026'}
+                                    {job.startDate ? new Date(job.startDate).toLocaleDateString('en-GB') : 'N/A'} — {job.endDate ? new Date(job.endDate).toLocaleDateString('en-GB') : 'N/A'}
                                 </Text>
                             </View>
 
                             <View style={styles.costSection}>
                                 <View style={styles.costInfo}>
-                                    <Text style={styles.costLabel}>Cost / Budget</Text>
+                                    <Text style={styles.costLabel}>Spent / Budget</Text>
                                     <Text style={styles.costValue}>{formatCurrency(job.cost || 0)} / {formatCurrency(job.budget || 0)}</Text>
                                 </View>
                                 <View style={styles.costProgress}>
@@ -179,7 +152,7 @@ const ReportsScreen = () => {
                                     </View>
                                 </View>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     ))}
                     
                     {stats.projectJobs.length === 0 && (

@@ -152,6 +152,88 @@ const RFIScreen = ({ navigation }) => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
             <WorkerHeader title="RFI Dashboard" showBranding={true} />
+            
+            <ScrollView 
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
+                {/* DASHBOARD HEADER */}
+                <View style={styles.dashboardHeader}>
+                    <View style={styles.headerTextContainer}>
+                        <Text style={styles.mainTitle}>RFI Console</Text>
+                        <Text style={styles.mainSubtitle}>Monitoring information requests across jobs</Text>
+                    </View>
+                    <TouchableOpacity style={styles.newBtn} onPress={() => setShowCreateModal(true)}>
+                        <MaterialCommunityIcons name="plus-circle" size={18} color="#fff" />
+                        <Text style={styles.newBtnText}>NEW RFI</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* OVERDUE / ALERTS SECTION */}
+                <View style={styles.alertSection}>
+                    <View style={styles.alertCard}>
+                        <View style={styles.alertHeaderRow}>
+                            <MaterialCommunityIcons name="clock-alert-outline" size={20} color="#EF4444" />
+                            <Text style={styles.alertHeaderTitle}>Critical & Overdue</Text>
+                            {overdueRFIs.length > 0 && (
+                                <View style={styles.alertBadge}>
+                                    <Text style={styles.alertBadgeText}>{overdueRFIs.length}</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {overdueRFIs.length === 0 ? (
+                            <Text style={styles.emptyAlertText}>No overdue RFIs at this time.</Text>
+                        ) : (
+                            overdueRFIs.map(item => (
+                                <TouchableOpacity 
+                                    key={item._id} 
+                                    style={styles.alertItem}
+                                    onPress={() => navigation.navigate('RFIDetail', { rfiId: item._id })}
+                                >
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.alertItemTitle} numberOfLines={1}>{item.subject}</Text>
+                                        <Text style={styles.alertItemMeta}>{item.projectId?.name || 'General'}</Text>
+                                    </View>
+                                    <Text style={styles.alertItemDate}>
+                                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'Overdue'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))
+                        )}
+                    </View>
+                </View>
+
+                {/* RECENT RFIs */}
+                <View style={{ marginTop: 32 }}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Recent Activity</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('RFIList')}>
+                            <Text style={styles.viewAllText}>View All</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.recentView}>
+                        {recentRFIs.length === 0 ? (
+                            <View style={[styles.rfiCard, { alignItems: 'center', padding: 30 }]}>
+                                <Text style={{ color: '#94A3B8', fontWeight: '700' }}>No RFIs found.</Text>
+                            </View>
+                        ) : (
+                            recentRFIs.map(item => <RFICard key={item._id} item={item} />)
+                        )}
+                    </View>
+                </View>
+
+                {/* FOOTER LINK */}
+                <TouchableOpacity 
+                    style={styles.footerLink}
+                    onPress={() => navigation.navigate('RFIList')}
+                >
+                    <Text style={styles.footerLinkText}>OPEN FULL RFI CENTER</Text>
+                    <Text style={styles.footerLinkSub}>Manage, Filter and Search all Project RFIs</Text>
+                </TouchableOpacity>
+            </ScrollView>
 
             {/* CREATE RFI MODAL */}
             <Modal visible={showCreateModal} animationType="slide" transparent>

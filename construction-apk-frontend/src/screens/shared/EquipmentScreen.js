@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, ScrollView, Dimensions, StatusBar, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, ScrollView, StatusBar, SafeAreaView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SHADOWS } from '../../constants/theme';
+import { SHADOWS } from '../../constants/theme';
 import WorkerHeader from '../../components/WorkerHeader';
 import { useApp } from '../../context/AppContext';
 import api from '../../utils/api';
-
-const { width } = Dimensions.get('window');
 
 const EquipmentScreen = ({ navigation }) => {
     const { user } = useApp();
@@ -48,15 +46,6 @@ const EquipmentScreen = ({ navigation }) => {
     useEffect(() => {
         fetchData();
     }, []);
-
-    const stats = useMemo(() => {
-        return {
-            heavy: data.filter(e => e.category === 'Heavy Equipment').length,
-            tools: data.filter(e => e.category === 'Small Tools').length,
-            assigned: data.filter(e => e.assignedJob !== null).length,
-            alerts: data.filter(e => e.status === 'maintenance').length
-        };
-    }, [data]);
 
     const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -156,19 +145,6 @@ const EquipmentScreen = ({ navigation }) => {
         }
     };
 
-    const StatCard = ({ label, value, sub, icon, color, bg }) => (
-        <View style={[styles.statCard, SHADOWS.small]}>
-            <View style={[styles.statIcon, { backgroundColor: bg }]}>
-                <MaterialCommunityIcons name={icon} size={20} color={color} />
-            </View>
-            <View style={styles.statContent}>
-                <Text style={styles.statValue}>{value}</Text>
-                <Text style={styles.statLabel}>{label}</Text>
-                {sub && <Text style={styles.statSub}>{sub}</Text>}
-            </View>
-        </View>
-    );
-
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
@@ -187,14 +163,6 @@ const EquipmentScreen = ({ navigation }) => {
                             <Text style={styles.addBtnText}>Add Item</Text>
                         </TouchableOpacity>
                     )}
-                </View>
-
-                {/* Stats Grid */}
-                <View style={styles.statsGrid}>
-                    <StatCard label="Heavy Assets" value={stats.heavy} sub="Large units" icon="crane" color="#2563EB" bg="#EFF6FF" />
-                    <StatCard label="Small Tools" value={stats.tools} sub="Power & Hand tools" icon="toolbox-outline" color="#F97316" bg="#FFF7ED" />
-                    <StatCard label="Assigned" value={stats.assigned} sub="Currently on site" icon="account-hard-hat" color="#10B981" bg="#F0FDF4" />
-                    <StatCard label="Alerts" value={stats.alerts} sub="Pending Return" icon="alert-circle-outline" color="#EF4444" bg="#FEF2F2" />
                 </View>
 
                 {/* Filters Section */}
@@ -246,16 +214,29 @@ const EquipmentScreen = ({ navigation }) => {
                                 >
                                     <View style={styles.assetHeader}>
                                         <View style={styles.assetMain}>
-                                            <Text style={styles.assetName}>{item.name}</Text>
+                                            <Text style={styles.assetName} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
                                             <View style={styles.assetTypeRow}>
-                                                <Text style={styles.assetType}>{item.type || 'Standard Unit'}</Text>
+                                                <View style={styles.assetTypeWrap}>
+                                                    <Text style={styles.assetType} numberOfLines={1} ellipsizeMode="tail">{item.type || 'Standard Unit'}</Text>
+                                                </View>
                                                 <Text style={styles.assetDivider}>•</Text>
-                                                <Text style={styles.assetId}>#{item.serialNumber || 'SN-NA'}</Text>
+                                                <Text style={styles.assetId} numberOfLines={1}>#{item.serialNumber || 'SN-NA'}</Text>
                                             </View>
                                         </View>
-                                        <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
-                                            <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
-                                            <Text style={[styles.statusLabel, { color: st.text }]}>{st.label}</Text>
+                                        <View style={styles.headerActions}>
+                                            <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                                                <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
+                                                <Text style={[styles.statusLabel, { color: st.text }]} numberOfLines={1}>{st.label}</Text>
+                                            </View>
+                                            {canManage && (
+                                                <TouchableOpacity
+                                                    style={styles.deleteBtn}
+                                                    onPress={() => handleDelete(item._id)}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                >
+                                                    <MaterialCommunityIcons name="delete-outline" size={18} color="#EF4444" />
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
                                     </View>
                                     
@@ -264,28 +245,30 @@ const EquipmentScreen = ({ navigation }) => {
                                     <View style={styles.assetInfoGrid}>
                                         <View style={styles.infoBox}>
                                             <Text style={styles.infoLabel}>LOCATION</Text>
-                                            <Text style={styles.infoValue} numberOfLines={1}>{item.location || 'Warehouse'}</Text>
+                                            <Text style={styles.infoValue} numberOfLines={1} ellipsizeMode="tail">
+                                                {item.location || 'Warehouse'}
+                                            </Text>
                                         </View>
                                         <View style={styles.infoBox}>
                                             <Text style={styles.infoLabel}>ASSIGNED JOB</Text>
-                                            <Text style={[styles.infoValue, item.assignedJob ? { color: '#2563EB' } : { color: '#94A3B8' }]} numberOfLines={1}>
+                                            <Text
+                                                style={[
+                                                    styles.infoValue,
+                                                    item.assignedJob ? { color: '#2563EB' } : { color: '#94A3B8' },
+                                                ]}
+                                                numberOfLines={1}
+                                                ellipsizeMode="tail"
+                                            >
                                                 {item.assignedJob?.name || 'Idle / Not Set'}
                                             </Text>
                                         </View>
                                         <View style={styles.infoBox}>
                                             <Text style={styles.infoLabel}>HOURLY RATE</Text>
-                                            <Text style={styles.infoValue}>${item.costPerHour || 0}/h</Text>
+                                            <Text style={styles.infoValue} numberOfLines={1}>
+                                                ${item.costPerHour || 0}/h
+                                            </Text>
                                         </View>
                                     </View>
-
-                                    {canManage && (
-                                        <TouchableOpacity 
-                                            style={styles.deleteAction} 
-                                            onPress={() => handleDelete(item._id)}
-                                        >
-                                            <MaterialCommunityIcons name="delete-outline" size={18} color="#EF4444" />
-                                        </TouchableOpacity>
-                                    )}
                                 </TouchableOpacity>
                             );
                         })
@@ -406,14 +389,6 @@ const styles = StyleSheet.create({
     addBtn: { backgroundColor: '#2563EB', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 4 },
     addBtnText: { color: '#fff', fontSize: 12, fontWeight: '900' },
 
-    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20, marginBottom: 32 },
-    statCard: { width: (width - 52) / 2, backgroundColor: '#fff', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
-    statIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-    statContent: {},
-    statValue: { fontSize: 22, fontWeight: '900', color: '#0F172A' },
-    statLabel: { fontSize: 13, fontWeight: '900', color: '#1E293B', marginTop: 2 },
-    statSub: { fontSize: 10, color: '#94A3B8', fontWeight: '800', marginTop: 2 },
-
     filterSection: { paddingHorizontal: 20, marginBottom: 24 },
     searchBar: { height: 52, backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
     searchInput: { flex: 1, fontSize: 14, fontWeight: '800', color: '#1E293B' },
@@ -424,24 +399,26 @@ const styles = StyleSheet.create({
     catBtnTextActive: { color: '#fff' },
 
     listContainer: { paddingHorizontal: 20 },
-    assetCard: { backgroundColor: '#fff', borderRadius: 28, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', position: 'relative' },
-    assetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-    assetMain: { flex: 1 },
-    assetName: { fontSize: 17, fontWeight: '900', color: '#0F172A' },
-    assetTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-    assetType: { fontSize: 11, fontWeight: '900', color: '#2563EB', textTransform: 'uppercase' },
-    assetDivider: { color: '#CBD5E1' },
-    assetId: { fontSize: 11, fontWeight: '800', color: '#94A3B8' },
-    statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, gap: 6 },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusLabel: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-    assetDividerLine: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
-    assetInfoGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-    infoBox: { flex: 1 },
-    infoLabel: { fontSize: 9, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4 },
-    infoValue: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
-    deleteAction: { position: 'absolute', top: 20, right: 10 },
-    
+    assetCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+    assetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 10 },
+    assetMain: { flex: 1, minWidth: 0, paddingRight: 6 },
+    headerActions: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, flexShrink: 0, paddingTop: 1 },
+    deleteBtn: { padding: 4, justifyContent: 'center', alignItems: 'center' },
+    assetName: { fontSize: 15, fontWeight: '900', color: '#0F172A', lineHeight: 19 },
+    assetTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+    assetTypeWrap: { flex: 1, minWidth: 0 },
+    assetType: { fontSize: 10, fontWeight: '900', color: '#2563EB', textTransform: 'uppercase' },
+    assetDivider: { color: '#CBD5E1', flexShrink: 0 },
+    assetId: { fontSize: 10, fontWeight: '800', color: '#94A3B8', flexShrink: 0 },
+    statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4 },
+    statusDot: { width: 5, height: 5, borderRadius: 2.5 },
+    statusLabel: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase', flexShrink: 1 },
+    assetDividerLine: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 12 },
+    assetInfoGrid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+    infoBox: { flex: 1, minWidth: 0 },
+    infoLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.4, marginBottom: 3 },
+    infoValue: { fontSize: 11, fontWeight: '800', color: '#1E293B', lineHeight: 14 },
+
     emptyView: { alignItems: 'center', paddingVertical: 60 },
     emptyText: { fontSize: 14, fontWeight: '800', color: '#94A3B8', marginTop: 16, textAlign: 'center' },
 

@@ -436,9 +436,12 @@ const TasksScreen = ({ navigation }) => {
                             />
 
                             <View style={styles.modalButtons}>
-                                <CustomButton title="Cancel" type="outline" style={{ flex: 1 }} onPress={() => setModalVisible(false)} />
-                                <View style={{ width: 12 }} />
-                                <CustomButton title={editingTask ? "Save" : "Create"} style={{ flex: 2 }} onPress={handleSave} loading={loading} />
+                                <View style={styles.modalBtnCol}>
+                                    <CustomButton title="Cancel" type="outline" onPress={() => setModalVisible(false)} />
+                                </View>
+                                <View style={[styles.modalBtnCol, styles.modalBtnColPrimary]}>
+                                    <CustomButton title={editingTask ? 'Save' : 'Create'} onPress={handleSave} loading={loading} />
+                                </View>
                             </View>
                             <View style={{ height: 40 }} />
                         </ScrollView>
@@ -572,7 +575,21 @@ const styles = StyleSheet.create({
         minHeight: 60,
         marginBottom: 16
     },
-    modalButtons: { flexDirection: 'row', gap: 12 },
+    modalButtons: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 12,
+        marginTop: 8,
+        width: '100%'
+    },
+    modalBtnCol: {
+        flex: 1,
+        minWidth: 0,
+        justifyContent: 'center'
+    },
+    modalBtnColPrimary: {
+        flex: 1.4
+    },
 
     selOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     selBox: { width: width * 0.8, backgroundColor: '#fff', borderRadius: 24, padding: 20, elevation: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15 },

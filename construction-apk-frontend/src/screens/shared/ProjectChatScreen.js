@@ -8,25 +8,44 @@ import AppHeader from '../../components/AppHeader';
 
 const ProjectChatScreen = ({ route, navigation }) => {
     const { project } = route.params;
-    const { messages, sendMessage, fetchMessages, user, uploadFile } = useApp();
+    const { messages, sendMessage, fetchMessages, ensureDirectChatRoom, user, uploadFile } = useApp();
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
+    const [dmRoomId, setDmRoomId] = useState(null);
     const flatListRef = useRef();
 
     const targetId = (project._id || project.id)?.toString();
     const isGeneral = targetId === 'GENERAL_COMPANY';
     const isPrivate = project.isPrivate || project.type === 'private';
+    const myId = user?._id?.toString();
 
     useEffect(() => {
+        let cancelled = false;
         const load = async () => {
             setLoading(true);
-            await fetchMessages(targetId);
-            setLoading(false);
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+            try {
+                let fetchId = targetId;
+                if (isPrivate) {
+                    const rid = await ensureDirectChatRoom(targetId);
+                    if (!cancelled && rid) {
+                        setDmRoomId(rid);
+                        fetchId = rid;
+                    } else if (!cancelled) setDmRoomId(null);
+                } else {
+                    setDmRoomId(null);
+                }
+                if (!cancelled) await fetchMessages(fetchId);
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+                }
+            }
         };
         load();
-    }, [targetId]);
+        return () => { cancelled = true; };
+    }, [targetId, isPrivate]);
 
     useEffect(() => {
         const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
@@ -36,12 +55,17 @@ const ProjectChatScreen = ({ route, navigation }) => {
     }, []);
 
     const chatMessages = (messages || []).filter(m => {
-        const mProjId = m.projectId?.toString();
-        const mRecId = m.receiverId?.toString();
+        const mRoomId = m.roomId != null ? String(m.roomId) : '';
+        const mProjId = m.projectId != null ? String(m.projectId) : '';
         const mSenderId = (m.sender?._id || m.sender || m.senderId)?.toString();
 
-        if (isGeneral) return !mProjId && !mRecId;
-        if (isPrivate) return (mRecId === targetId || mSenderId === targetId) && !mProjId;
+        if (isGeneral) return !mProjId && !m.receiverId;
+        if (isPrivate) {
+            const resolved = dmRoomId?.toString();
+            if (resolved && mRoomId === resolved) return true;
+            if (!mProjId && targetId && myId && (mSenderId === targetId || mSenderId === myId)) return true;
+            return false;
+        }
         return mProjId === targetId;
     }).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
@@ -49,6 +73,10 @@ const ProjectChatScreen = ({ route, navigation }) => {
         if (!text.trim()) return;
         setSending(true);
         try {
+            if (isPrivate && !dmRoomId) {
+                const rid = await ensureDirectChatRoom(targetId);
+                if (rid) setDmRoomId(rid);
+            }
             const success = isPrivate
                 ? await sendMessage(text, null, targetId)
                 : await sendMessage(text, targetId);
@@ -106,11 +134,15 @@ const ProjectChatScreen = ({ route, navigation }) => {
     const sendImageMessage = async (uri) => {
         setSending(true);
         try {
+            if (isPrivate && !dmRoomId) {
+                const rid = await ensureDirectChatRoom(targetId);
+                if (rid) setDmRoomId(rid);
+            }
             const fileName = uri.split('/').pop();
             const attachment = await uploadFile(uri, fileName, 'image/jpeg');
 
-            await (isPrivate 
-                ? sendMessage("[Photo Attachment]", null, targetId, targetId, [attachment]) 
+            await (isPrivate
+                ? sendMessage("[Photo Attachment]", null, targetId, targetId, [attachment])
                 : sendMessage("[Photo Attachment]", targetId, null, targetId, [attachment])
             );
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);

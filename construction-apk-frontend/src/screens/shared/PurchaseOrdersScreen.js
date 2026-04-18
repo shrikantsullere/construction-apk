@@ -6,7 +6,6 @@ import {
     FlatList,
     ActivityIndicator,
     TouchableOpacity,
-    Dimensions,
     TextInput,
     SafeAreaView,
     StatusBar,
@@ -17,18 +16,31 @@ import {
     Platform
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SHADOWS, SPACING, SIZES } from '../../constants/theme';
+import { SHADOWS } from '../../constants/theme';
 import api from '../../utils/api';
 import { useApp } from '../../context/AppContext';
 import WorkerHeader from '../../components/WorkerHeader';
 
-const { width } = Dimensions.get('window');
+const PO_STATUS_FILTERS = [
+    { value: 'all', label: 'All status' },
+    { value: 'Draft', label: 'Draft' },
+    { value: 'Pending Approval', label: 'Pending approval' },
+    { value: 'Approved', label: 'Approved' },
+    { value: 'Sent', label: 'Sent' },
+    { value: 'Delivered', label: 'Delivered' },
+    { value: 'Closed', label: 'Closed' },
+    { value: 'Cancelled', label: 'Cancelled' },
+];
 
 const PurchaseOrdersScreen = ({ navigation }) => {
     const { projects } = useApp();
     const [pos, setPos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [projectFilterId, setProjectFilterId] = useState(null);
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [projectFilterVisible, setProjectFilterVisible] = useState(false);
+    const [statusFilterVisible, setStatusFilterVisible] = useState(false);
     
     // Create PO State
     const [createVisible, setCreateVisible] = useState(false);
@@ -122,15 +134,66 @@ const PurchaseOrdersScreen = ({ navigation }) => {
         setItems([{ id: Date.now(), itemName: '', description: '', quantity: '1', unitPrice: '0' }]);
     };
 
-    const filteredPOs = pos.filter(po => 
-        (po.poNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (po.vendorName || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const projectPickerRows = useMemo(() => {
+        const map = new Map();
+        const add = (id, name) => {
+            if (id == null || id === '') return;
+            const key = String(id);
+            if (!map.has(key)) map.set(key, { id, name: name || 'Project' });
+        };
+        (projects || []).forEach(p => add(p._id || p.id, p.name));
+        pos.forEach(po => {
+            const pid = po.projectId?._id || po.projectId;
+            const name = po.projectId?.name;
+            add(pid, name);
+        });
+        const rows = Array.from(map.values()).sort((a, b) =>
+            (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+        );
+        return [{ id: null, name: 'All projects' }, ...rows];
+    }, [projects, pos]);
 
-    const stats = {
-        activeVolume: pos.length,
-        pendingApproval: pos.filter(p => p.status === 'Pending Approval' || p.status === 'Pending').reduce((acc, p) => acc + (p.totalAmount || 0), 0),
-        committedBudget: pos.filter(p => p.status === 'Approved').reduce((acc, p) => acc + (p.totalAmount || 0), 0)
+    const projectFilterLabel = useMemo(() => {
+        if (projectFilterId == null) return 'All projects';
+        const row = projectPickerRows.find(
+            p => p.id != null && String(p.id) === String(projectFilterId)
+        );
+        return row?.name || 'Project';
+    }, [projectFilterId, projectPickerRows]);
+
+    const statusFilterLabel = useMemo(() => {
+        const row = PO_STATUS_FILTERS.find(s => s.value === statusFilter);
+        return row?.label || 'All status';
+    }, [statusFilter]);
+
+    const filteredPOs = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return pos.filter(po => {
+            const matchesSearch =
+                !q ||
+                (po.poNumber || '').toLowerCase().includes(q) ||
+                (po.vendorName || '').toLowerCase().includes(q);
+            const pid = po.projectId?._id || po.projectId;
+            const matchesProject =
+                projectFilterId == null || String(pid || '') === String(projectFilterId);
+            const st = po.status || '';
+            const matchesStatus =
+                statusFilter === 'all' ||
+                st === statusFilter ||
+                (statusFilter === 'Pending Approval' && st === 'Pending');
+            return matchesSearch && matchesProject && matchesStatus;
+        });
+    }, [pos, searchQuery, projectFilterId, statusFilter]);
+
+    const clearListFilters = () => {
+        setProjectFilterId(null);
+        setStatusFilter('all');
+    };
+
+    const openPODetail = (item) => {
+        const id = item._id || item.id;
+        if (!id) return;
+        navigation.navigate('PurchaseOrderDetail', { poId: String(id) });
     };
 
     const renderPOItem = ({ item }) => {
@@ -139,7 +202,11 @@ const PurchaseOrdersScreen = ({ navigation }) => {
         const statusBg = isApproved ? '#EFF6FF' : '#FFF7ED';
 
         return (
-            <TouchableOpacity style={[styles.poCard, SHADOWS.medium]} activeOpacity={0.9}>
+            <TouchableOpacity
+                style={[styles.poCard, SHADOWS.medium]}
+                activeOpacity={0.9}
+                onPress={() => openPODetail(item)}
+            >
                 {/* Status Accent Bar */}
                 <View style={[styles.statusAccent, { backgroundColor: statusColor }]} />
                 
@@ -176,9 +243,9 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                             </View>
                             <Text style={styles.poDateTxt}>{new Date(item.createdAt || Date.now()).toLocaleDateString()}</Text>
                         </View>
-                        <TouchableOpacity style={styles.detailsBtn}>
+                        <View style={styles.detailsBtn} pointerEvents="none">
                             <MaterialCommunityIcons name="chevron-right-circle-outline" size={24} color="#CBD5E1" />
-                        </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -201,42 +268,7 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.statsSection}>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIcon, { backgroundColor: '#EFF6FF' }]}>
-                            <MaterialCommunityIcons name="file-document-multiple-outline" size={20} color="#2563EB" />
-                        </View>
-                        <View>
-                            <Text style={styles.statLabel}>ACTIVE VOLUME</Text>
-                            <Text style={styles.statValue}>{stats.activeVolume}</Text>
-                            <Text style={styles.statDesc}>TOTAL SYSTEM POS</Text>
-                        </View>
-                    </View>
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIcon, { backgroundColor: '#FFF7ED' }]}>
-                            <MaterialCommunityIcons name="clock-fast" size={20} color="#EA580C" />
-                        </View>
-                        <View>
-                            <Text style={styles.statLabel}>AWAITING</Text>
-                            <Text style={styles.statValue}>${stats.pendingApproval.toLocaleString()}</Text>
-                            <Text style={styles.statDesc}>PENDING SPEND</Text>
-                        </View>
-                    </View>
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIcon, { backgroundColor: '#F0FDF4' }]}>
-                            <MaterialCommunityIcons name="shield-check-outline" size={20} color="#10B981" />
-                        </View>
-                        <View>
-                            <Text style={styles.statLabel}>BUDGET</Text>
-                            <Text style={styles.statValue}>${stats.committedBudget.toLocaleString()}</Text>
-                            <Text style={styles.statDesc}>APPROVED COSTS</Text>
-                        </View>
-                    </View>
-                </ScrollView>
-
-                <View style={styles.filterSection}>
+            <View style={styles.filterSection}>
                     <View style={styles.searchBox}>
                         <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
                         <TextInput 
@@ -248,19 +280,28 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                         />
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolsRow}>
-                        <TouchableOpacity style={styles.toolBtn}>
-                            <Text style={styles.toolBtnTxt}>ALL PROJECTS</Text>
+                        <TouchableOpacity
+                            style={styles.toolBtn}
+                            onPress={() => setProjectFilterVisible(true)}
+                        >
+                            <Text style={styles.toolBtnTxt} numberOfLines={1}>
+                                {projectFilterId == null ? 'ALL PROJECTS' : projectFilterLabel.toUpperCase()}
+                            </Text>
                             <MaterialCommunityIcons name="chevron-down" size={16} color="#64748B" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.toolBtn}>
-                            <Text style={styles.toolBtnTxt}>ALL STATUS</Text>
+                        <TouchableOpacity
+                            style={styles.toolBtn}
+                            onPress={() => setStatusFilterVisible(true)}
+                        >
+                            <Text style={styles.toolBtnTxt} numberOfLines={1}>
+                                {statusFilter === 'all' ? 'ALL STATUS' : statusFilterLabel.toUpperCase()}
+                            </Text>
                             <MaterialCommunityIcons name="chevron-down" size={16} color="#64748B" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.toolBtnIcon}>
+                        <TouchableOpacity style={styles.toolBtnIcon} onPress={clearListFilters}>
                             <MaterialCommunityIcons name="filter-variant" size={18} color="#64748B" />
                         </TouchableOpacity>
                     </ScrollView>
-                </View>
             </View>
 
             {loading ? (
@@ -277,78 +318,160 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                 />
             )}
 
+            <Modal visible={projectFilterVisible} transparent animationType="fade" onRequestClose={() => setProjectFilterVisible(false)}>
+                <View style={styles.selBack}>
+                    <View style={styles.selCard}>
+                        <Text style={styles.selTitle}>Filter by project</Text>
+                        <FlatList
+                            data={projectPickerRows}
+                            keyExtractor={item => (item.id == null ? '__all__' : String(item.id))}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item }) => {
+                                const selected =
+                                    (item.id == null && projectFilterId == null) ||
+                                    (item.id != null && String(item.id) === String(projectFilterId));
+                                return (
+                                    <TouchableOpacity
+                                        style={styles.selItem}
+                                        onPress={() => {
+                                            setProjectFilterId(item.id);
+                                            setProjectFilterVisible(false);
+                                        }}
+                                    >
+                                        <Text style={styles.selItemTxt} numberOfLines={2}>{item.name}</Text>
+                                        {selected ? (
+                                            <MaterialCommunityIcons name="check-circle" size={22} color="#2563EB" />
+                                        ) : (
+                                            <View style={{ width: 22 }} />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                        <TouchableOpacity onPress={() => setProjectFilterVisible(false)} style={styles.selClose}>
+                            <Text style={styles.selCloseTxt}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal visible={statusFilterVisible} transparent animationType="fade" onRequestClose={() => setStatusFilterVisible(false)}>
+                <View style={styles.selBack}>
+                    <View style={styles.selCard}>
+                        <Text style={styles.selTitle}>Filter by status</Text>
+                        <FlatList
+                            data={PO_STATUS_FILTERS}
+                            keyExtractor={item => item.value}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item }) => {
+                                const selected = statusFilter === item.value;
+                                return (
+                                    <TouchableOpacity
+                                        style={styles.selItem}
+                                        onPress={() => {
+                                            setStatusFilter(item.value);
+                                            setStatusFilterVisible(false);
+                                        }}
+                                    >
+                                        <Text style={styles.selItemTxt}>{item.label}</Text>
+                                        {selected ? (
+                                            <MaterialCommunityIcons name="check-circle" size={22} color="#2563EB" />
+                                        ) : (
+                                            <View style={{ width: 22 }} />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                        <TouchableOpacity onPress={() => setStatusFilterVisible(false)} style={styles.selClose}>
+                            <Text style={styles.selCloseTxt}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
             {/* FULL SCREEN CREATE PO MODAL */}
             <Modal visible={createVisible} animationType="slide" transparent={false}>
                 <SafeAreaView style={styles.createMain}>
                     <View style={styles.createHeader}>
                         <TouchableOpacity onPress={() => setCreateVisible(false)} style={styles.backBtnModal}>
-                            <MaterialCommunityIcons name="chevron-left" size={30} color="#0F172A" />
+                            <MaterialCommunityIcons name="chevron-left" size={28} color="#0F172A" />
                         </TouchableOpacity>
-                        <View>
-                            <Text style={styles.createTitle}>Create Purchase Order</Text>
+                        <View style={styles.createHeaderText}>
+                            <Text style={styles.createTitle} numberOfLines={2}>Create Purchase Order</Text>
                             <View style={styles.createSubWrap}>
-                                <MaterialCommunityIcons name="info" size={14} color="#3B82F6" />
-                                <Text style={styles.createSub}>SUBMITTING REQUISITION</Text>
+                                <MaterialCommunityIcons name="information-outline" size={14} color="#2563EB" />
+                                <Text style={styles.createSub}>Submitting requisition</Text>
                             </View>
                         </View>
                     </View>
 
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.createScroll}>
+                    <KeyboardAvoidingView
+                        style={styles.createKeyboard}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+                    >
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={styles.createScroll}
+                            keyboardShouldPersistTaps="handled"
+                        >
                         {/* BASIC DETAILS */}
                         <View style={styles.sectionCard}>
-                            <Text style={styles.sectionTitle}>BASIC DETAILS</Text>
-                            <View style={styles.formGrid}>
-                                <View style={styles.formItem}>
+                            <Text style={styles.sectionTitle}>Basic details</Text>
+                            <View style={styles.fieldsStack}>
+                                <View style={styles.formField}>
                                     <View style={styles.labelGrp}>
-                                        <MaterialCommunityIcons name="office-building" size={14} color="#3B82F6" />
-                                        <Text style={styles.formLabel}>PROJECT</Text>
+                                        <MaterialCommunityIcons name="office-building-outline" size={16} color="#2563EB" />
+                                        <Text style={styles.formLabel}>Project</Text>
                                     </View>
-                                    <TouchableOpacity style={styles.modalSelector} onPress={() => setSelProjectVisible(true)}>
-                                        <Text style={[styles.selText, !formProject && { color: '#94A3B8' }]}>
-                                            {formProject?.name || 'Select Project'}
+                                    <TouchableOpacity style={styles.modalSelector} onPress={() => setSelProjectVisible(true)} activeOpacity={0.7}>
+                                        <Text style={[styles.selText, !formProject && styles.selTextPlaceholder]} numberOfLines={1}>
+                                            {formProject?.name || 'Select project'}
                                         </Text>
-                                        <MaterialCommunityIcons name="chevron-down" size={18} color="#0F172A" />
+                                        <MaterialCommunityIcons name="chevron-down" size={22} color="#64748B" />
                                     </TouchableOpacity>
                                 </View>
-                            </View>
 
-                            <View style={styles.formGrid}>
-                                <View style={styles.formItem}>
+                                <View style={styles.formField}>
                                     <View style={styles.labelGrp}>
-                                        <MaterialCommunityIcons name="account-outline" size={14} color="#3B82F6" />
-                                        <Text style={styles.formLabel}>VENDOR NAME</Text>
+                                        <MaterialCommunityIcons name="store-outline" size={16} color="#2563EB" />
+                                        <Text style={styles.formLabel}>Vendor name</Text>
                                     </View>
-                                    <TextInput 
+                                    <TextInput
                                         style={styles.formInp}
-                                        placeholder="Enter Vendor Name"
+                                        placeholder="Company or contact name"
+                                        placeholderTextColor="#94A3B8"
                                         value={formVendor}
                                         onChangeText={setFormVendor}
                                     />
                                 </View>
-                                <View style={styles.formItem}>
+
+                                <View style={styles.formField}>
                                     <View style={styles.labelGrp}>
-                                        <MaterialCommunityIcons name="email-outline" size={14} color="#3B82F6" />
-                                        <Text style={styles.formLabel}>VENDOR EMAIL</Text>
+                                        <MaterialCommunityIcons name="email-outline" size={16} color="#2563EB" />
+                                        <Text style={styles.formLabel}>Vendor email</Text>
                                     </View>
-                                    <TextInput 
+                                    <TextInput
                                         style={styles.formInp}
-                                        placeholder="Enter Vendor Email"
+                                        placeholder="vendor@example.com"
+                                        placeholderTextColor="#94A3B8"
                                         value={formEmail}
                                         onChangeText={setFormEmail}
                                         keyboardType="email-address"
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
                                     />
                                 </View>
-                            </View>
 
-                            <View style={styles.formGrid}>
-                                <View style={styles.formItem}>
+                                <View style={styles.formField}>
                                     <View style={styles.labelGrp}>
-                                        <MaterialCommunityIcons name="calendar-outline" size={14} color="#3B82F6" />
-                                        <Text style={styles.formLabel}>DATE</Text>
+                                        <MaterialCommunityIcons name="calendar-outline" size={16} color="#2563EB" />
+                                        <Text style={styles.formLabel}>Request date</Text>
                                     </View>
                                     <View style={styles.formInpBox}>
                                         <Text style={styles.inpValTxt}>{new Date().toLocaleDateString()}</Text>
-                                        <MaterialCommunityIcons name="calendar-check" size={20} color="#0F172A" />
+                                        <MaterialCommunityIcons name="calendar-check" size={22} color="#64748B" />
                                     </View>
                                 </View>
                             </View>
@@ -357,54 +480,64 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                         {/* LINE ITEMS */}
                         <View style={styles.sectionCard}>
                             <View style={styles.sectionHeaderRow}>
-                                <Text style={styles.sectionTitle}>LINE ITEMS</Text>
-                                <TouchableOpacity style={styles.btnAddItem} onPress={handleAddItem}>
-                                    <MaterialCommunityIcons name="plus-circle-outline" size={16} color="#3B82F6" />
-                                    <Text style={styles.btnAddItemTxt}>ADD ITEM</Text>
+                                <Text style={styles.sectionTitleInline}>Line items</Text>
+                                <TouchableOpacity style={styles.btnAddItem} onPress={handleAddItem} activeOpacity={0.7}>
+                                    <MaterialCommunityIcons name="plus-circle-outline" size={18} color="#2563EB" />
+                                    <Text style={styles.btnAddItemTxt}>Add item</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            {items.map((it, idx) => (
+                            {items.map((it) => (
                                 <View key={it.id} style={styles.lineItemBox}>
                                     <View style={styles.lineItemHeader}>
-                                        <TextInput 
+                                        <TextInput
                                             style={styles.lineItemNameInp}
-                                            placeholder="Item Name"
+                                            placeholder="Item name"
+                                            placeholderTextColor="#94A3B8"
                                             value={it.itemName}
                                             onChangeText={v => handleUpdateItem(it.id, 'itemName', v)}
                                         />
-                                        <TouchableOpacity onPress={() => handleRemoveItem(it.id)}>
-                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color="#EF4444" />
+                                        <TouchableOpacity
+                                            style={styles.lineItemRemove}
+                                            onPress={() => handleRemoveItem(it.id)}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            <MaterialCommunityIcons name="trash-can-outline" size={22} color="#EF4444" />
                                         </TouchableOpacity>
                                     </View>
-                                    <TextInput 
+                                    <TextInput
                                         style={styles.lineItemDescInp}
-                                        placeholder="Description"
+                                        placeholder="Description (optional)"
+                                        placeholderTextColor="#94A3B8"
                                         value={it.description}
                                         onChangeText={v => handleUpdateItem(it.id, 'description', v)}
                                     />
                                     <View style={styles.lineItemCalcRow}>
                                         <View style={styles.calcBox}>
-                                            <Text style={styles.calcLab}>QTY</Text>
-                                            <TextInput 
-                                                keyboardType="numeric"
+                                            <Text style={styles.calcLab}>Qty</Text>
+                                            <TextInput
+                                                keyboardType="decimal-pad"
                                                 style={styles.calcInp}
+                                                placeholder="0"
+                                                placeholderTextColor="#94A3B8"
                                                 value={it.quantity}
                                                 onChangeText={v => handleUpdateItem(it.id, 'quantity', v)}
                                             />
                                         </View>
                                         <View style={styles.calcBox}>
-                                            <Text style={styles.calcLab}>PRICE</Text>
-                                            <TextInput 
-                                                keyboardType="numeric"
+                                            <Text style={styles.calcLab}>Unit price</Text>
+                                            <TextInput
+                                                keyboardType="decimal-pad"
                                                 style={styles.calcInp}
+                                                placeholder="0.00"
+                                                placeholderTextColor="#94A3B8"
                                                 value={it.unitPrice}
                                                 onChangeText={v => handleUpdateItem(it.id, 'unitPrice', v)}
                                             />
                                         </View>
-                                        <View style={[styles.calcBox, { alignItems: 'flex-end', borderRightWidth: 0 }]}>
-                                            <Text style={styles.calcLab}>ITEM TOTAL</Text>
-                                            <Text style={styles.calcTotalText}>
+                                        <View style={[styles.calcBox, styles.calcBoxTotal]}>
+                                            <Text style={styles.calcLab}>Line total</Text>
+                                            <Text style={styles.calcTotalText} numberOfLines={1}>
                                                 ${((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0)).toFixed(2)}
                                             </Text>
                                         </View>
@@ -416,7 +549,7 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                         {/* SUMMARY & NOTES */}
                         <View style={styles.sidebarSection}>
                             <View style={[styles.summaryCard, SHADOWS.large]}>
-                                <Text style={styles.summaryTitle}>REQUISITION SUMMARY</Text>
+                                <Text style={styles.summaryTitle}>Requisition summary</Text>
                                 <View style={styles.summaryRow}>
                                     <Text style={styles.summaryLab}>Subtotal</Text>
                                     <Text style={styles.summaryVal}>${poSummary.subtotal.toFixed(2)}</Text>
@@ -425,36 +558,37 @@ const PurchaseOrdersScreen = ({ navigation }) => {
                                     <Text style={styles.summaryLab}>Tax (15%)</Text>
                                     <Text style={styles.summaryVal}>${poSummary.tax.toFixed(2)}</Text>
                                 </View>
-                                <View style={[styles.summaryRow, { marginTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 15 }]}>
-                                    <Text style={styles.totalLab}>ESTIMATED TOTAL</Text>
+                                <View style={styles.summaryTotalRow}>
+                                    <Text style={styles.totalLab}>Estimated total</Text>
                                     <Text style={styles.totalVal}>${poSummary.total.toFixed(2)}</Text>
                                 </View>
 
-                                <Text style={[styles.summaryTitle, { marginTop: 30 }]}>QUICK NOTES</Text>
-                                <TextInput 
+                                <Text style={styles.summaryTitleNotes}>Notes</Text>
+                                <TextInput
                                     style={styles.notesInp}
-                                    placeholder="Notes for procurement team..."
-                                    placeholderTextColor="#475569"
+                                    placeholder="Notes for procurement…"
+                                    placeholderTextColor="#64748B"
                                     multiline
                                     value={formNotes}
                                     onChangeText={setFormNotes}
                                 />
 
-                                <TouchableOpacity style={styles.btnSubmitFinal} onPress={handleCreatePO} disabled={submitting}>
+                                <TouchableOpacity style={styles.btnSubmitFinal} onPress={handleCreatePO} disabled={submitting} activeOpacity={0.85}>
                                     {submitting ? <ActivityIndicator color="#fff" /> : (
                                         <>
                                             <MaterialCommunityIcons name="check-decagram" size={20} color="#fff" />
-                                            <Text style={styles.btnSubmitFinalTxt}>SUBMIT REQUISITION</Text>
+                                            <Text style={styles.btnSubmitFinalTxt}>Submit requisition</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
 
-                                <TouchableOpacity onPress={() => setCreateVisible(false)}>
-                                    <Text style={styles.discardTxt}>DISCARD CHANGES</Text>
+                                <TouchableOpacity onPress={() => setCreateVisible(false)} style={styles.discardBtn} activeOpacity={0.7}>
+                                    <Text style={styles.discardTxt}>Discard</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </ScrollView>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
                 </SafeAreaView>
 
                 {/* Project Select Nested Modal */}
@@ -492,14 +626,6 @@ const styles = StyleSheet.create({
     addBtn: { backgroundColor: '#2563EB', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 4 },
     addBtnText: { color: '#fff', fontSize: 12, fontWeight: '900' },
 
-    statsSection: { marginBottom: 12 },
-    statsRow: { gap: 8, paddingHorizontal: 20, marginBottom: 20 },
-    statCard: { width: 140, backgroundColor: '#fff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 1 },
-    statIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-    statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
-    statValue: { fontSize: 16, fontWeight: '1000', color: '#0F172A', marginTop: 1 },
-    statDesc: { fontSize: 7, fontWeight: '800', color: '#CBD5E1', marginTop: 2 },
-    
     filterSection: { paddingHorizontal: 20, marginBottom: 12, gap: 12 },
     searchBox: { height: 52, backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
     searchInput: { flex: 1, marginLeft: 12, fontSize: 13, fontWeight: '700', color: '#1E293B' },
@@ -533,48 +659,167 @@ const styles = StyleSheet.create({
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
     // Modal Create PO
-    createMain: { flex: 1, backgroundColor: '#FAFBFD' },
-    createHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    backBtnModal: { marginRight: 15 },
-    createTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    createMain: { flex: 1, backgroundColor: '#F8FAFC' },
+    createKeyboard: { flex: 1 },
+    createHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    backBtnModal: { marginRight: 12, padding: 4 },
+    createHeaderText: { flex: 1, minWidth: 0 },
+    createTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', letterSpacing: -0.4 },
     createSubWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-    createSub: { fontSize: 10, fontWeight: '900', color: '#3B82F6', letterSpacing: 1 },
-    createScroll: { padding: 20, paddingBottom: 60 },
-    sectionCard: { backgroundColor: '#fff', borderRadius: 28, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#F1F5F9' },
-    sectionTitle: { fontSize: 10, fontWeight: '900', color: '#94A3B8', letterSpacing: 1, marginBottom: 20 },
-    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    formGrid: { flexDirection: 'row', gap: 15, marginBottom: 15 },
-    formItem: { flex: 1 },
-    labelGrp: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-    formLabel: { fontSize: 9, fontWeight: '900', color: '#64748B' },
-    modalSelector: { height: 50, backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    selText: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
-    formInp: { height: 50, backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 15, fontSize: 14, fontWeight: '700', color: '#1E293B' },
-    formInpBox: { height: 50, backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    inpValTxt: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
-    btnAddItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-    btnAddItemTxt: { fontSize: 11, fontWeight: '900', color: '#2563EB' },
-    lineItemBox: { backgroundColor: '#F8FAFC', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-    lineItemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-    lineItemNameInp: { fontSize: 15, fontWeight: '900', color: '#0F172A', flex: 1 },
-    lineItemDescInp: { fontSize: 11, color: '#64748B', marginBottom: 15, fontWeight: '600' },
-    lineItemCalcRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 15 },
-    calcBox: { flex: 1, borderRightWidth: 1, borderRightColor: '#E2E8F0', paddingRight: 10 },
-    calcLab: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginBottom: 6 },
-    calcInp: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
-    calcTotalText: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
-    sidebarSection: { marginBottom: 30 },
-    summaryCard: { backgroundColor: '#0F172A', borderRadius: 36, padding: 32 },
-    summaryTitle: { fontSize: 10, fontWeight: '900', color: '#64748B', letterSpacing: 1.5, marginBottom: 25 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    summaryLab: { fontSize: 15, color: '#fff', fontWeight: '500' },
-    summaryVal: { fontSize: 15, color: '#fff', fontWeight: '800' },
-    totalLab: { fontSize: 11, fontWeight: '900', color: '#3B82F6', letterSpacing: 1 },
-    totalVal: { fontSize: 26, fontWeight: '900', color: '#3B82F6' },
-    notesInp: { backgroundColor: '#1E293B', borderRadius: 24, padding: 20, minHeight: 120, fontSize: 14, color: '#fff', marginTop: 10, marginBottom: 30, textAlignVertical: 'top' },
-    btnSubmitFinal: { backgroundColor: '#2563EB', height: 64, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
-    btnSubmitFinalTxt: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
-    discardTxt: { color: '#64748B', fontSize: 12, fontWeight: '800', textAlign: 'center', marginTop: 25, letterSpacing: 1 },
+    createSub: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
+    createScroll: { padding: 16, paddingBottom: 40 },
+    sectionCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+    sectionTitle: { fontSize: 11, fontWeight: '900', color: '#64748B', letterSpacing: 0.8, marginBottom: 14, textTransform: 'uppercase' },
+    sectionTitleInline: { fontSize: 11, fontWeight: '900', color: '#64748B', letterSpacing: 0.8, textTransform: 'uppercase' },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 12 },
+    fieldsStack: { gap: 16 },
+    formField: { width: '100%' },
+    labelGrp: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    formLabel: { fontSize: 12, fontWeight: '800', color: '#475569' },
+    modalSelector: {
+        minHeight: 48,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    selText: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0F172A', marginRight: 8 },
+    selTextPlaceholder: { color: '#94A3B8', fontWeight: '600' },
+    formInp: {
+        minHeight: 48,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    formInpBox: {
+        minHeight: 48,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    inpValTxt: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
+    btnAddItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' },
+    btnAddItemTxt: { fontSize: 12, fontWeight: '900', color: '#2563EB' },
+    lineItemBox: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    lineItemHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+    lineItemNameInp: {
+        flex: 1,
+        minWidth: 0,
+        minHeight: 44,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+    lineItemRemove: { padding: 4 },
+    lineItemDescInp: {
+        minHeight: 44,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        fontSize: 14,
+        color: '#475569',
+        fontWeight: '600',
+        marginBottom: 12,
+        textAlignVertical: 'top',
+    },
+    lineItemCalcRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    calcBox: { flex: 1, minWidth: 0 },
+    calcBoxTotal: { alignItems: 'flex-end' },
+    calcLab: { fontSize: 10, fontWeight: '900', color: '#64748B', marginBottom: 6, letterSpacing: 0.3 },
+    calcInp: {
+        width: '100%',
+        minHeight: 44,
+        paddingHorizontal: 10,
+        paddingVertical: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+    calcTotalText: { fontSize: 15, fontWeight: '900', color: '#0F172A', paddingVertical: 10, paddingHorizontal: 4 },
+    sidebarSection: { marginBottom: 24 },
+    summaryCard: { backgroundColor: '#0F172A', borderRadius: 20, padding: 20 },
+    summaryTitle: { fontSize: 11, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.8, marginBottom: 16, textTransform: 'uppercase' },
+    summaryTitleNotes: { fontSize: 11, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.8, marginTop: 20, marginBottom: 10, textTransform: 'uppercase' },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    summaryLab: { fontSize: 14, color: '#E2E8F0', fontWeight: '600' },
+    summaryVal: { fontSize: 14, color: '#F8FAFC', fontWeight: '800' },
+    summaryTotalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 8,
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(148, 163, 184, 0.35)',
+    },
+    totalLab: { fontSize: 12, fontWeight: '900', color: '#93C5FD', letterSpacing: 0.5 },
+    totalVal: { fontSize: 22, fontWeight: '900', color: '#60A5FA' },
+    notesInp: {
+        backgroundColor: '#1E293B',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#334155',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        minHeight: 100,
+        fontSize: 14,
+        color: '#F8FAFC',
+        marginBottom: 20,
+        textAlignVertical: 'top',
+    },
+    btnSubmitFinal: {
+        backgroundColor: '#2563EB',
+        minHeight: 52,
+        borderRadius: 14,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    btnSubmitFinalTxt: { color: '#fff', fontSize: 15, fontWeight: '900' },
+    discardBtn: { alignItems: 'center', paddingVertical: 14 },
+    discardTxt: { color: '#94A3B8', fontSize: 14, fontWeight: '700' },
     selBack: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', padding: 25 },
     selCard: { backgroundColor: '#fff', borderRadius: 32, padding: 25, maxHeight: '60%' },
     selTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginBottom: 20 },

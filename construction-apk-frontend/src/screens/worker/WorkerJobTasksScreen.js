@@ -144,10 +144,17 @@ const WorkerJobTasksScreen = ({ navigation, route }) => {
                     </View>
                 </View>
 
-                {/* Search Bar */}
-                <View style={styles.searchSection}>
-                    <View style={styles.searchBox}>
-                        <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
+
+                <View style={styles.tabsSection}>
+                    <View style={styles.tabItem}>
+                        <MaterialCommunityIcons name="check-circle-outline" size={16} color="#2563EB" />
+                        <Text style={styles.tabText}>TASKS</Text>
+                    </View>
+                </View>
+
+                <View style={styles.filterArea}>
+                    <View style={styles.taskSearch}>
+                        <MaterialCommunityIcons name="magnify" size={18} color="#94A3B8" />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Search tasks, projects..."

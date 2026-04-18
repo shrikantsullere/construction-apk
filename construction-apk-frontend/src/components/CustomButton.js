@@ -21,7 +21,7 @@ const CustomButton = ({ title, onPress, type = 'primary', loading = false, style
     };
 
     return (
-        <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, style]}>
+        <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, styles.outer, style]}>
             <TouchableOpacity
                 activeOpacity={1}
                 onPress={onPress}
@@ -47,13 +47,19 @@ const CustomButton = ({ title, onPress, type = 'primary', loading = false, style
 };
 
 const styles = StyleSheet.create({
+    /** Lets flex + minWidth on parent rows size the button (width:100% breaks some flex rows). */
+    outer: {
+        alignSelf: 'stretch',
+        minWidth: 72
+    },
     container: {
         height: 52, // Standard professional height
         borderRadius: SIZES.radius,
         justifyContent: 'center',
         alignItems: 'center',
         width: '100%',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
+        minWidth: 72
     },
     primary: {
         backgroundColor: COLORS.primary,
@@ -64,7 +70,7 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     outline: {
-        backgroundColor: COLORS.white,
+        backgroundColor: '#F1F5F9',
         borderWidth: 2,
         borderColor: COLORS.primary,
     },

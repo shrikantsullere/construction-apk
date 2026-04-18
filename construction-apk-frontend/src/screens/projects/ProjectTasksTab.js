@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
+import { COLORS, SHADOWS } from '../../constants/theme';
 import { useApp } from '../../context/AppContext';
 import TaskCard from '../../components/TaskCard';
 import CustomInput from '../../components/CustomInput';
@@ -131,9 +131,12 @@ export const ProjectTasksTab = ({ project }) => {
                             />
 
                             <View style={styles.modalButtons}>
-                                <CustomButton title="CANCEL" type="outline" style={styles.flex1} onPress={() => setModalVisible(false)} />
-                                <View style={{ width: SPACING.m }} />
-                                <CustomButton title="ADD TO BACKLOG" style={styles.flex1} onPress={handleAddTask} />
+                                <View style={styles.modalBtnCol}>
+                                    <CustomButton title="CANCEL" type="outline" onPress={() => setModalVisible(false)} />
+                                </View>
+                                <View style={[styles.modalBtnCol, styles.modalBtnColPrimary]}>
+                                    <CustomButton title="ADD TO BACKLOG" onPress={handleAddTask} />
+                                </View>
                             </View>
                         </ScrollView>
                     </View>
@@ -182,6 +185,13 @@ const styles = StyleSheet.create({
     mHeader: { marginBottom: 24 },
     mTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
     mSubTitle: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginTop: 4 },
-    modalButtons: { flexDirection: 'row', marginTop: 32 },
-    flex1: { flex: 1 },
+    modalButtons: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 12,
+        marginTop: 32,
+        width: '100%'
+    },
+    modalBtnCol: { flex: 1, minWidth: 0, justifyContent: 'center' },
+    modalBtnColPrimary: { flex: 1.4 }
 });

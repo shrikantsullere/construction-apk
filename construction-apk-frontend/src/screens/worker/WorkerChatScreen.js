@@ -10,22 +10,46 @@ const { width } = Dimensions.get('window');
 
 const WorkerChatScreen = ({ navigation, route }) => {
     const { room } = route.params || {};
-    const { user, messages, sendMessage, fetchMessages, uploadFile } = useApp();
+    const { user, messages, sendMessage, fetchMessages, ensureDirectChatRoom, uploadFile } = useApp();
     const [msgText, setMsgText] = useState('');
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
+    /** Real ChatRoom id for DMs (route only has peer user id). */
+    const [dmRoomId, setDmRoomId] = useState(null);
     const flatListRef = useRef();
 
     useEffect(() => {
+        let cancelled = false;
         const load = async () => {
             if (!room?.id) return;
             setLoading(true);
-            await fetchMessages(room.id);
-            setLoading(false);
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+            try {
+                let fetchId = room.id;
+                if (room.type === 'private') {
+                    const rid = await ensureDirectChatRoom(room.id);
+                    if (!cancelled && rid) {
+                        setDmRoomId(rid);
+                        fetchId = rid;
+                    } else if (!cancelled) {
+                        setDmRoomId(null);
+                    }
+                } else {
+                    setDmRoomId(null);
+                }
+                if (!cancelled) await fetchMessages(fetchId);
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
+                }
+            }
         };
         load();
-    }, [room?.id]);
+        return () => { cancelled = true; };
+    }, [room?.id, room?.type]);
+
+    const peerId = room?.id?.toString();
+    const myId = user?._id?.toString();
 
     useEffect(() => {
         const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
@@ -36,16 +60,22 @@ const WorkerChatScreen = ({ navigation, route }) => {
 
     const roomMessages = (messages || []).filter(m => {
         if (!room) return false;
-        const mRoomId = (m.roomId || m._id || m.id)?.toString();
-        const mProjId = m.projectId?.toString();
-        const mRecId = m.receiverId?.toString();
+        const mRoomId = m.roomId != null ? String(m.roomId) : '';
+        const mProjId = m.projectId != null ? String(m.projectId) : '';
         const mSenderId = (m.sender?._id || m.sender || m.senderId)?.toString();
-        const roomId = room.id?.toString();
+        const key = room.id?.toString();
 
-        if (mRoomId === roomId) return true;
-        if (roomId === 'GENERAL_COMPANY') return !mProjId && !mRecId;
-        if (room.type === 'project') return mProjId === roomId;
-        if (room.type === 'private') return (mSenderId === roomId || mRecId === roomId) && !mProjId;
+        if (room.type === 'private') {
+            const resolved = dmRoomId?.toString();
+            if (resolved && mRoomId && mRoomId === resolved) return true;
+            // API stores messages on Chat.roomId; legacy filter missed own messages (no receiverId on Chat)
+            if (!mProjId && peerId && myId && (mSenderId === peerId || mSenderId === myId)) return true;
+            return false;
+        }
+
+        if (mRoomId === key) return true;
+        if (key === 'GENERAL_COMPANY') return !mProjId && !m.receiverId;
+        if (room.type === 'project') return mProjId === key;
         return false;
     }).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
@@ -53,16 +83,20 @@ const WorkerChatScreen = ({ navigation, route }) => {
         if (!msgText.trim()) return;
         setSending(true);
         try {
+            if (room.type === 'private' && !dmRoomId) {
+                const rid = await ensureDirectChatRoom(room.id);
+                if (rid) setDmRoomId(rid);
+            }
             // Pass correct params: sendMessage(text, projectId, receiverId, roomId)
-            // room.id = ChatRoom._id (always pass as roomId)
-            // room.projectId = Project._id (pass as projectId if available)
             const success = room.type === 'private'
                 ? await sendMessage(msgText, null, room.id)
                 : await sendMessage(msgText, room.projectId || null, null, room.id);
-            
+
             if (success) {
                 setMsgText('');
                 setTimeout(() => flatListRef.current?.scrollToEnd(), 200);
+            } else {
+                Alert.alert('Error', 'Message could not be sent. Check your connection and permissions.');
             }
         } catch (err) {
             Alert.alert("Error", "Message could not be sent.");
@@ -125,17 +159,21 @@ const WorkerChatScreen = ({ navigation, route }) => {
     const sendImageMessage = async (uri) => {
         setSending(true);
         try {
-            // 1. Upload the file
+            if (room.type === 'private' && !dmRoomId) {
+                const rid = await ensureDirectChatRoom(room.id);
+                if (rid) setDmRoomId(rid);
+            }
             const fileName = uri.split('/').pop();
             const attachment = await uploadFile(uri, fileName, 'image/jpeg');
 
-            // 2. Send the message with attachment
             const success = room.type === 'private'
                 ? await sendMessage("[Photo Attachment]", null, room.id, room.id, [attachment])
                 : await sendMessage("[Photo Attachment]", room.projectId || null, null, room.id, [attachment]);
-            
+
             if (success) {
                 setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);
+            } else {
+                Alert.alert('Error', 'Could not send the photo.');
             }
         } catch (err) {
             Alert.alert("Upload Error", "Failed to upload image. Please try again.");
