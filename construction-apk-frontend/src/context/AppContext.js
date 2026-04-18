@@ -648,6 +648,31 @@ export const AppProvider = ({ children }) => {
         }
     };
 
+    /** Resolve peer user id → DIRECT ChatRoom id (GET/POST /chat/direct). Required for DM list + send. */
+    const ensureDirectChatRoom = async (peerUserId) => {
+        try {
+            if (!peerUserId) return null;
+            const res = await api.post('/chat/direct', { targetUserId: peerUserId });
+            const id = res.data?.id || res.data?._id;
+            return id ? id.toString() : null;
+        } catch (e) {
+            const data = e.response?.data;
+            const msg =
+                typeof data === 'string' ? data : (data?.message || data?.error || e.message || '');
+            const legacyPmClient =
+                typeof msg === 'string' &&
+                msg.includes('Project Managers are not permitted to initiate direct chats with Clients');
+            if (legacyPmClient) {
+                console.warn(
+                    '[Chat] Your API is still on an old build. Redeploy Constuction_Backend with the current chatController (PMs may DM clients). Until then, direct chats with clients will fail.'
+                );
+            } else {
+                console.warn('ensureDirectChatRoom:', msg);
+            }
+            return null;
+        }
+    };
+
     const fetchMessages = async (roomId) => {
         try {
             if (!roomId) return [];
@@ -739,15 +764,16 @@ export const AppProvider = ({ children }) => {
             const savedMsg = res.data;
 
             setMessages(prev => {
-                // Ensure consistency for filtering: map _id to id if needed, and ensure roomId/projectId are present
+                const rawRoom = savedMsg.roomId ?? payload.roomId;
+                const rawProj = savedMsg.projectId ?? payload.projectId;
                 const normalizedMsg = {
                     ...savedMsg,
                     id: savedMsg._id || savedMsg.id,
-                    roomId: savedMsg.roomId || payload.roomId,
-                    projectId: savedMsg.projectId || payload.projectId,
+                    roomId: rawRoom != null ? String(rawRoom) : undefined,
+                    projectId: rawProj != null ? String(rawProj) : undefined,
                     receiverId: savedMsg.receiverId || payload.receiverId
                 };
-                
+
                 if (prev.find(m => (m._id || m.id) === normalizedMsg.id)) return prev;
                 return [...prev, normalizedMsg];
             });
@@ -885,7 +911,7 @@ export const AppProvider = ({ children }) => {
             jobs, addJob, updateJob,
             updateEquipment, deleteEquipment,
             issues, setIssues, addIssue,
-            messages, setMessages, sendMessage, fetchMessages, uploadFile,
+            messages, setMessages, sendMessage, fetchMessages, ensureDirectChatRoom, uploadFile,
             rfis, rfiStats, addRFI,
             isClockedIn, toggleClock,
             clockInTime, clockOutTime, getWorkDuration,

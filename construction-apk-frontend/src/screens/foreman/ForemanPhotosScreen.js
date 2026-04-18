@@ -5,9 +5,19 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import WorkerHeader from '../../components/WorkerHeader';
 import api, { getServerUrl } from '../../utils/api';
+import { enrichPhotoWithProject } from '../../utils/enrichPhotoWithProject';
 import { useApp } from '../../context/AppContext';
 
 const { width } = Dimensions.get('window');
+
+function idKey(raw) {
+    if (raw == null || raw === '') return '';
+    return String(raw);
+}
+function projectIdFromDoc(p) {
+    if (!p) return '';
+    return idKey(p._id ?? p.id);
+}
 
 const ForemanPhotosScreen = () => {
     const { projects } = useApp();
@@ -23,6 +33,7 @@ const ForemanPhotosScreen = () => {
     const [description, setDescription] = useState('');
     const [uploadProjectId, setUploadProjectId] = useState('none');
     const [searchQuery, setSearchQuery] = useState('');
+    const [deletingId, setDeletingId] = useState(null);
 
     // Custom Selector State
     const [selVisible, setSelVisible] = useState(false);
@@ -30,13 +41,22 @@ const ForemanPhotosScreen = () => {
     const [selOptions, setSelOptions] = useState([]);
     const [selOnSelect, setSelOnSelect] = useState(() => () => {});
 
-    const selectedProjectLabel = selectedProjectId === 'all' ? 'All Sites' : (projects.find(p => (p._id || p.id) === selectedProjectId)?.name || 'Select Site');
+    const selectedProjectLabel =
+        selectedProjectId === 'all'
+            ? 'All Sites'
+            : projects.find((p) => projectIdFromDoc(p) === idKey(selectedProjectId))?.name || 'Select Site';
+
+    const uploadTargetLabel =
+        uploadProjectId === 'none'
+            ? null
+            : projects.find((p) => projectIdFromDoc(p) === idKey(uploadProjectId))?.name;
 
     const fetchPhotos = async () => {
         try {
             setLoading(true);
             const res = await api.get('/photos');
-            setPhotos(res.data || []);
+            const list = res.data || [];
+            setPhotos(list.map((p) => enrichPhotoWithProject(p, projects)));
         } catch (e) {
             console.error('Fetch photos error:', e.message);
         } finally {
@@ -48,8 +68,10 @@ const ForemanPhotosScreen = () => {
         fetchPhotos();
     }, [projects]);
 
-    const filteredPhotos = (photos || []).filter(p => {
-        const matchesProject = selectedProjectId === 'all' || (p.projectId?._id || p.projectId) === selectedProjectId;
+    const filteredPhotos = (photos || []).filter((p) => {
+        const matchesProject =
+            selectedProjectId === 'all' ||
+            idKey(p.projectId?._id || p.projectId) === idKey(selectedProjectId);
         const matchesSearch = (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                              (p.projectId?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
         return matchesProject && matchesSearch;
@@ -103,14 +125,14 @@ const ForemanPhotosScreen = () => {
 
             formData.append('description', note);
             if (uploadProjectId !== 'none') {
-                formData.append('projectId', uploadProjectId);
+                formData.append('projectId', idKey(uploadProjectId));
             }
 
             const res = await api.post('/photos/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            setPhotos(prev => [res.data, ...prev]);
+            setPhotos((prev) => [enrichPhotoWithProject(res.data, projects), ...prev]);
             Alert.alert('Success', 'Photo uploaded to site records.');
             setUploadModal(false);
         } catch (error) {
@@ -128,8 +150,40 @@ const ForemanPhotosScreen = () => {
         setTempImage(null);
         setExternalUrl('');
         setDescription('');
-        setUploadProjectId('none');
+        if (selectedProjectId !== 'all') {
+            setUploadProjectId(idKey(selectedProjectId));
+        } else {
+            setUploadProjectId('none');
+        }
         setUploadModal(true);
+    };
+
+    const confirmDeletePhoto = (item) => {
+        const id = item._id || item.id;
+        if (!id) return;
+        const label = item.description || item.projectId?.name || 'this photo';
+        Alert.alert(
+            'Delete photo',
+            `Remove "${label.length > 60 ? `${label.slice(0, 60)}…` : label}" from the gallery?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setDeletingId(id);
+                            await api.delete(`/photos/${id}`);
+                            setPhotos((prev) => prev.filter((p) => (p._id || p.id) !== id));
+                        } catch (e) {
+                            Alert.alert('Error', e.response?.data?.message || 'Could not delete photo.');
+                        } finally {
+                            setDeletingId(null);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const openDropdown = (title, options, onSelect) => {
@@ -154,9 +208,17 @@ const ForemanPhotosScreen = () => {
                 <View style={styles.actionRow}>
                     <TouchableOpacity 
                         style={styles.customDropdownBtn}
-                        onPress={() => openDropdown('Filter By Site', 
-                            [{ label: 'All Sites', value: 'all', icon: 'layers' }, ...projects.map(p => ({ label: p.name, value: p._id || p.id, icon: 'office-building' }))],
-                            (opt) => setSelectedProjectId(opt.value)
+                        onPress={() => openDropdown(
+                            'Filter By Site',
+                            [
+                                { label: 'All Sites', value: 'all', icon: 'layers' },
+                                ...projects.map((p) => ({
+                                    label: p.name,
+                                    value: projectIdFromDoc(p),
+                                    icon: 'office-building'
+                                }))
+                            ],
+                            (opt) => setSelectedProjectId(opt.value === 'all' ? 'all' : idKey(opt.value))
                         )}
                     >
                         <View style={styles.dropdownLeft}>
@@ -207,7 +269,22 @@ const ForemanPhotosScreen = () => {
                                     </View>
                                 </View>
                                 <View style={styles.photoFooter}>
-                                    <Text style={styles.photoDesc} numberOfLines={1}>{item.description || 'Verified Update'}</Text>
+                                    <View style={styles.photoTitleRow}>
+                                        <Text style={styles.photoDesc} numberOfLines={1}>{item.description || 'Verified Update'}</Text>
+                                        <TouchableOpacity
+                                            style={styles.deleteIconBtn}
+                                            onPress={() => confirmDeletePhoto(item)}
+                                            disabled={deletingId === (item._id || item.id)}
+                                            accessibilityLabel="Delete photo"
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            {deletingId === (item._id || item.id) ? (
+                                                <ActivityIndicator size="small" color="#DC2626" />
+                                            ) : (
+                                                <MaterialCommunityIcons name="trash-can-outline" size={18} color="#DC2626" />
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
                                     <View style={styles.metaRow}>
                                         <MaterialCommunityIcons name="calendar" size={10} color="#94A3B8" />
                                         <Text style={styles.metaText}>{new Date(item.createdAt).toLocaleDateString()}</Text>
@@ -253,6 +330,14 @@ const ForemanPhotosScreen = () => {
                                 />
 
                                 <Text style={styles.fieldLabel}>Select Target Site</Text>
+                                <View style={styles.uploadProjectSummary}>
+                                    <MaterialCommunityIcons name="link-variant" size={16} color="#059669" />
+                                    <Text style={styles.uploadProjectSummaryText} numberOfLines={2}>
+                                        {uploadProjectId === 'none'
+                                            ? 'Not linked — choose a site below or leave as General.'
+                                            : `Will save under: ${uploadTargetLabel || 'site'}`}
+                                    </Text>
+                                </View>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
                                     <TouchableOpacity
                                         style={[styles.projectItem, uploadProjectId === 'none' && styles.projectItemActive]}
@@ -260,15 +345,19 @@ const ForemanPhotosScreen = () => {
                                     >
                                         <Text style={[styles.projectItemText, uploadProjectId === 'none' && styles.projectItemTextActive]}>General</Text>
                                     </TouchableOpacity>
-                                    {projects?.map(p => (
-                                        <TouchableOpacity
-                                            key={p._id || p.id}
-                                            style={[styles.projectItem, uploadProjectId === (p._id || p.id) && styles.projectItemActive]}
-                                            onPress={() => setUploadProjectId(p._id || p.id)}
-                                        >
-                                            <Text style={[styles.projectItemText, uploadProjectId === (p._id || p.id) && styles.projectItemTextActive]}>{p.name}</Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                    {projects?.map((p) => {
+                                        const pid = projectIdFromDoc(p);
+                                        const selected = uploadProjectId !== 'none' && idKey(uploadProjectId) === pid;
+                                        return (
+                                            <TouchableOpacity
+                                                key={pid}
+                                                style={[styles.projectItem, selected && styles.projectItemActive]}
+                                                onPress={() => setUploadProjectId(pid)}
+                                            >
+                                                <Text style={[styles.projectItemText, selected && styles.projectItemTextActive]}>{p.name}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </ScrollView>
 
                                 <TouchableOpacity 
@@ -337,11 +426,24 @@ const styles = StyleSheet.create({
     photoCard: { backgroundColor: '#fff', borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
     imageContainer: { width: '100%', height: 160, backgroundColor: '#F1F5F9' },
     photoImg: { width: '100%', height: '100%' },
+    deleteIconBtn: {
+        padding: 2,
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexShrink: 0
+    },
     photoOverlay: { position: 'absolute', top: 10, left: 10, right: 10 },
     photoBadge: { backgroundColor: 'rgba(15, 23, 42, 0.8)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
     photoBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
     photoFooter: { padding: 16 },
-    photoDesc: { fontSize: 14, fontWeight: '800', color: '#1E293B', marginBottom: 8 },
+    photoTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        marginBottom: 8
+    },
+    photoDesc: { flex: 1, fontSize: 14, fontWeight: '800', color: '#1E293B', minWidth: 0 },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     metaText: { fontSize: 10, color: '#94A3B8', fontWeight: '800' },
     
@@ -362,6 +464,19 @@ const styles = StyleSheet.create({
     previewImage: { width: '100%', height: '100%' },
 
     fieldLabel: { fontSize: 10, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 },
+    uploadProjectSummary: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        backgroundColor: '#ECFDF5',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        marginBottom: 12
+    },
+    uploadProjectSummaryText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#065F46', lineHeight: 18 },
     inputField: { width: '100%', height: 54, backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 18, color: '#0F172A', fontWeight: '800', marginBottom: 24 },
     
     projectScroll: { flexGrow: 0, marginBottom: 32 },

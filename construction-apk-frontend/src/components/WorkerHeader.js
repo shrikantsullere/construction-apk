@@ -78,23 +78,33 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                                 style={styles.menuBtn}
                                 onPress={() => {
                                     try {
-                                        // Standard drawer opening attempt
-                                        if (typeof navigation.openDrawer === 'function') {
-                                            navigation.openDrawer();
-                                        } 
-                                        else if (typeof navigation.toggleDrawer === 'function') {
-                                            navigation.toggleDrawer();
+                                        // Attempt to find a drawer in the navigation tree
+                                        let parent = navigation;
+                                        let drawerFound = false;
+
+                                        while (parent) {
+                                            if (typeof parent.openDrawer === 'function' || typeof parent.toggleDrawer === 'function') {
+                                                drawerFound = true;
+                                                break;
+                                            }
+                                            parent = parent.getParent();
                                         }
-                                        else {
-                                            const parent = navigation.getParent();
-                                            if (parent && typeof parent.openDrawer === 'function') {
+
+                                        if (drawerFound && parent) {
+                                            if (typeof parent.openDrawer === 'function') {
                                                 parent.openDrawer();
                                             } else {
-                                                navigation.dispatch(DrawerActions.toggleDrawer());
+                                                parent.toggleDrawer();
+                                            }
+                                        } else {
+                                            // Fallback: If no drawer found but we can go back, do that instead 
+                                            // of showing a broken menu button action
+                                            if (navigation.canGoBack()) {
+                                                navigation.goBack();
                                             }
                                         }
                                     } catch (e) {
-                                        console.warn('-- DRAWER OPEN FAILED --', e.message);
+                                        console.warn('-- DRAWER ACTION FAILED --', e.message);
                                     }
                                 }}
                             >
@@ -178,10 +188,10 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                 </View>
             )}
 
-            {/* NOTIFICATION MODAL */}
-            <Modal visible={isNotifying} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { maxHeight: '80%', marginTop: 60 }]}>
+            {/* NOTIFICATION MODAL - FULL SCREEN */}
+            <Modal visible={isNotifying} animationType="slide" transparent={false}>
+                <View style={[styles.notifModalContainer, { paddingTop: insets.top }]}>
+                    <View style={styles.notifModalContent}>
                         <View style={styles.modalSearchHeader}>
                             <Text style={styles.modalTitle}>Notifications</Text>
                             <TouchableOpacity onPress={() => setIsNotifying(false)}>
@@ -236,6 +246,7 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                                     </TouchableOpacity>
                                 ))
                             )}
+                            <View style={{ height: 40 }} />
                         </ScrollView>
                     </View>
                 </View>
@@ -520,6 +531,15 @@ const styles = StyleSheet.create({
         paddingBottom: 15,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
+    },
+    notifModalContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    notifModalContent: {
+        flex: 1,
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
     },
     modalInput: {
         flex: 1,

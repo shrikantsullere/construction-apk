@@ -79,9 +79,12 @@ export const IssuesTab = ({ project }) => {
                         </View>
 
                         <View style={styles.modalButtons}>
-                            <CustomButton title="Cancel" type="outline" style={styles.flex1} onPress={() => setModalVisible(false)} />
-                            <View style={{ width: SPACING.m }} />
-                            <CustomButton title="Flag Issue" style={styles.flex1} onPress={handleAddIssue} />
+                            <View style={styles.modalBtnCol}>
+                                <CustomButton title="Cancel" type="outline" onPress={() => setModalVisible(false)} />
+                            </View>
+                            <View style={[styles.modalBtnCol, styles.modalBtnColPrimary]}>
+                                <CustomButton title="Flag Issue" onPress={handleAddIssue} />
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -187,8 +190,11 @@ const styles = StyleSheet.create({
     },
     modalButtons: {
         flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 12,
+        marginTop: 8,
+        width: '100%'
     },
-    flex1: {
-        flex: 1,
-    },
+    modalBtnCol: { flex: 1, minWidth: 0, justifyContent: 'center' },
+    modalBtnColPrimary: { flex: 1.4 }
 });

@@ -5,9 +5,20 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import WorkerHeader from '../../components/WorkerHeader';
 import api, { getServerUrl } from '../../utils/api';
+import { enrichPhotoWithProject } from '../../utils/enrichPhotoWithProject';
 import { useApp } from '../../context/AppContext';
 
 const { width } = Dimensions.get('window');
+
+/** Compare project ids reliably (Mongo ObjectId vs string from API/state). */
+function idKey(raw) {
+    if (raw == null || raw === '') return '';
+    return String(raw);
+}
+function projectIdFromDoc(p) {
+    if (!p) return '';
+    return idKey(p._id ?? p.id);
+}
 
 const ProjectManagerPhotosScreen = () => {
     const { projects } = useApp();
@@ -23,6 +34,7 @@ const ProjectManagerPhotosScreen = () => {
     const [description, setDescription] = useState('');
     const [uploadProjectId, setUploadProjectId] = useState('none');
     const [searchQuery, setSearchQuery] = useState('');
+    const [deletingId, setDeletingId] = useState(null);
 
     // Custom Selector State
     const [selVisible, setSelVisible] = useState(false);
@@ -30,13 +42,22 @@ const ProjectManagerPhotosScreen = () => {
     const [selOptions, setSelOptions] = useState([]);
     const [selOnSelect, setSelOnSelect] = useState(() => () => {});
 
-    const selectedProjectLabel = selectedProjectId === 'all' ? 'All Projects' : (projects.find(p => (p._id || p.id) === selectedProjectId)?.name || 'Select Project');
+    const selectedProjectLabel =
+        selectedProjectId === 'all'
+            ? 'All Projects'
+            : projects.find((p) => projectIdFromDoc(p) === idKey(selectedProjectId))?.name || 'Select Project';
+
+    const uploadTargetLabel =
+        uploadProjectId === 'none'
+            ? null
+            : projects.find((p) => projectIdFromDoc(p) === idKey(uploadProjectId))?.name;
 
     const fetchPhotos = async () => {
         try {
             setLoading(true);
             const res = await api.get('/photos');
-            setPhotos(res.data);
+            const list = res.data || [];
+            setPhotos(list.map((p) => enrichPhotoWithProject(p, projects)));
         } catch (e) {
             console.error('Fetch photos error:', e.response?.data || e.message);
         } finally {
@@ -49,7 +70,9 @@ const ProjectManagerPhotosScreen = () => {
     }, [projects]);
 
     const filteredPhotos = (photos || []).filter(p => {
-        const matchesProject = selectedProjectId === 'all' || (p.projectId?._id || p.projectId) === selectedProjectId;
+        const matchesProject =
+            selectedProjectId === 'all' ||
+            idKey(p.projectId?._id || p.projectId) === idKey(selectedProjectId);
         const matchesSearch = (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                              (p.projectId?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
         return matchesProject && matchesSearch;
@@ -57,7 +80,7 @@ const ProjectManagerPhotosScreen = () => {
 
     const getPhotoCount = (pid) => {
         if (pid === 'all') return photos.length;
-        return photos.filter(p => (p.projectId?._id || p.projectId) === pid).length;
+        return photos.filter((p) => idKey(p.projectId?._id || p.projectId) === idKey(pid)).length;
     };
 
     const pickImage = async () => {
@@ -108,14 +131,14 @@ const ProjectManagerPhotosScreen = () => {
 
             formData.append('description', note);
             if (uploadProjectId !== 'none') {
-                formData.append('projectId', uploadProjectId);
+                formData.append('projectId', idKey(uploadProjectId));
             }
 
             const res = await api.post('/photos/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            setPhotos(prev => [res.data, ...prev]);
+            setPhotos((prev) => [enrichPhotoWithProject(res.data, projects), ...prev]);
             Alert.alert('Success', 'Photo uploaded successfully!');
             setUploadModal(false);
         } catch (error) {
@@ -138,8 +161,40 @@ const ProjectManagerPhotosScreen = () => {
         setTempImage(null);
         setExternalUrl('');
         setDescription('');
-        setUploadProjectId('none');
+        if (selectedProjectId !== 'all') {
+            setUploadProjectId(idKey(selectedProjectId));
+        } else {
+            setUploadProjectId('none');
+        }
         setUploadModal(true);
+    };
+
+    const confirmDeletePhoto = (item) => {
+        const id = item._id || item.id;
+        if (!id) return;
+        const label = item.description || item.projectId?.name || 'this photo';
+        Alert.alert(
+            'Delete photo',
+            `Remove "${label.length > 60 ? `${label.slice(0, 60)}…` : label}" from the gallery?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setDeletingId(id);
+                            await api.delete(`/photos/${id}`);
+                            setPhotos((prev) => prev.filter((p) => (p._id || p.id) !== id));
+                        } catch (e) {
+                            Alert.alert('Error', e.response?.data?.message || 'Could not delete photo.');
+                        } finally {
+                            setDeletingId(null);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const openDropdown = (title, options, onSelect) => {
@@ -164,9 +219,17 @@ const ProjectManagerPhotosScreen = () => {
                 <View style={styles.actionRow}>
                     <TouchableOpacity 
                         style={styles.customDropdownBtn}
-                        onPress={() => openDropdown('Filter By Project', 
-                            [{ label: 'All Projects', value: 'all', icon: 'layers' }, ...projects.map(p => ({ label: p.name, value: p._id || p.id, icon: 'office-building' }))],
-                            (opt) => setSelectedProjectId(opt.value)
+                        onPress={() => openDropdown(
+                            'Filter By Project',
+                            [
+                                { label: 'All Projects', value: 'all', icon: 'layers' },
+                                ...projects.map((p) => ({
+                                    label: p.name,
+                                    value: projectIdFromDoc(p),
+                                    icon: 'office-building'
+                                }))
+                            ],
+                            (opt) => setSelectedProjectId(opt.value === 'all' ? 'all' : idKey(opt.value))
                         )}
                     >
                         <View style={styles.dropdownLeft}>
@@ -217,7 +280,22 @@ const ProjectManagerPhotosScreen = () => {
                                     </View>
                                 </View>
                                 <View style={styles.photoFooter}>
-                                    <Text style={styles.photoDesc} numberOfLines={1}>{item.description || 'Verified Site Update'}</Text>
+                                    <View style={styles.photoTitleRow}>
+                                        <Text style={styles.photoDesc} numberOfLines={1}>{item.description || 'Verified Site Update'}</Text>
+                                        <TouchableOpacity
+                                            style={styles.deleteIconBtn}
+                                            onPress={() => confirmDeletePhoto(item)}
+                                            disabled={deletingId === (item._id || item.id)}
+                                            accessibilityLabel="Delete photo"
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            {deletingId === (item._id || item.id) ? (
+                                                <ActivityIndicator size="small" color="#DC2626" />
+                                            ) : (
+                                                <MaterialCommunityIcons name="trash-can-outline" size={18} color="#DC2626" />
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
                                     <View style={styles.metaRow}>
                                         <MaterialCommunityIcons name="calendar" size={10} color="#94A3B8" />
                                         <Text style={styles.metaText}>{new Date(item.createdAt).toLocaleDateString()}</Text>
@@ -275,6 +353,14 @@ const ProjectManagerPhotosScreen = () => {
                             />
 
                             <Text style={styles.fieldLabel}>Project</Text>
+                            <View style={styles.uploadProjectSummary}>
+                                <MaterialCommunityIcons name="link-variant" size={16} color="#2563EB" />
+                                <Text style={styles.uploadProjectSummaryText} numberOfLines={2}>
+                                    {uploadProjectId === 'none'
+                                        ? 'Not linked — photo is company-wide until you pick a project below.'
+                                        : `Will save under: ${uploadTargetLabel || 'project'}`}
+                                </Text>
+                            </View>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
                                 <TouchableOpacity
                                     style={[styles.projectItem, uploadProjectId === 'none' && styles.projectItemActive]}
@@ -282,15 +368,19 @@ const ProjectManagerPhotosScreen = () => {
                                 >
                                     <Text style={[styles.projectItemText, uploadProjectId === 'none' && styles.projectItemTextActive]}>General / None</Text>
                                 </TouchableOpacity>
-                                {projects?.map(p => (
-                                    <TouchableOpacity
-                                        key={p._id || p.id}
-                                        style={[styles.projectItem, uploadProjectId === (p._id || p.id) && styles.projectItemActive]}
-                                        onPress={() => setUploadProjectId(p._id || p.id)}
-                                    >
-                                        <Text style={[styles.projectItemText, uploadProjectId === (p._id || p.id) && styles.projectItemTextActive]}>{p.name}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                                {projects?.map((p) => {
+                                    const pid = projectIdFromDoc(p);
+                                    const selected = uploadProjectId !== 'none' && idKey(uploadProjectId) === pid;
+                                    return (
+                                        <TouchableOpacity
+                                            key={pid}
+                                            style={[styles.projectItem, selected && styles.projectItemActive]}
+                                            onPress={() => setUploadProjectId(pid)}
+                                        >
+                                            <Text style={[styles.projectItemText, selected && styles.projectItemTextActive]}>{p.name}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </ScrollView>
 
                             <TouchableOpacity 
@@ -389,6 +479,12 @@ const styles = StyleSheet.create({
     },
     imageContainer: { width: '100%', height: 150, backgroundColor: '#F1F5F9' },
     photoImg: { width: '100%', height: '100%' },
+    deleteIconBtn: {
+        padding: 2,
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexShrink: 0
+    },
     photoOverlay: { position: 'absolute', top: 8, left: 8, right: 8 },
     photoBadge: { 
         backgroundColor: 'rgba(15, 23, 42, 0.65)', 
@@ -399,7 +495,14 @@ const styles = StyleSheet.create({
     },
     photoBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900', letterSpacing: 0.3 },
     photoFooter: { padding: 12 },
-    photoDesc: { fontSize: 13, fontWeight: '800', color: '#1E293B', marginBottom: 6 },
+    photoTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        marginBottom: 6
+    },
+    photoDesc: { flex: 1, fontSize: 13, fontWeight: '800', color: '#1E293B', minWidth: 0 },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     metaText: { fontSize: 10, color: '#94A3B8', fontWeight: '800' },
     
@@ -422,6 +525,19 @@ const styles = StyleSheet.create({
     previewImage: { width: '100%', height: '100%' },
 
     fieldLabel: { fontSize: 11, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+    uploadProjectSummary: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        marginBottom: 12
+    },
+    uploadProjectSummaryText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#1E3A8A', lineHeight: 18 },
     inputField: { width: '100%', height: 44, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 16, color: '#0F172A', fontWeight: '600', marginBottom: 20 },
     
     projectScroll: { flexGrow: 0, marginBottom: 24 },

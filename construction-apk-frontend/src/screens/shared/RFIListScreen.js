@@ -191,7 +191,10 @@ const RFIListScreen = ({ navigation }) => {
                                 <Text style={styles.actionBtnTxt}>Update Status</Text>
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnGhost]}>
+                        <TouchableOpacity 
+                            style={[styles.actionBtn, styles.actionBtnGhost]}
+                            onPress={() => navigation.navigate('RFIDetail', { rfiId: item._id })}
+                        >
                             <MaterialCommunityIcons name="eye-outline" size={15} color="#64748B" />
                             <Text style={[styles.actionBtnTxt, { color: '#64748B' }]}>View</Text>
                         </TouchableOpacity>

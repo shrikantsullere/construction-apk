@@ -24,9 +24,6 @@ const CrewClockScreen = ({ navigation }) => {
 
     // Modal state
     const [projectModalVisible, setProjectModalVisible] = useState(false);
-    
-    // Stats
-    const [stats, setStats] = useState({ onSite: 0, scheduled: 0, total: 0 });
 
     // Live Ticker for metrics
     const [now, setNow] = useState(new Date());
@@ -61,11 +58,6 @@ const CrewClockScreen = ({ navigation }) => {
             });
 
             setWorkers(enriched);
-            setStats({
-                onSite: enriched.filter(w => w.isClockedIn).length,
-                scheduled: enriched.length, // Matching software logic for "Scheduled Today" placeholder
-                total: enriched.length,
-            });
         } catch (err) {
             console.error('Crew fetch error:', err);
         } finally {
@@ -249,7 +241,60 @@ const CrewClockScreen = ({ navigation }) => {
             <StatusBar barStyle="dark-content" />
             <WorkerHeader title="Crew Control" />
 
-            {isProcessing && <View style={styles.loader}><ActivityIndicator color="#2563EB" size="large" /></View>}
+            <View style={styles.topInfo}>
+                <View style={styles.searchRow}>
+                    <View style={styles.searchBar}>
+                        <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
+                        <TextInput 
+                            style={styles.searchInput}
+                            placeholder="Search crew members..."
+                            placeholderTextColor="#94A3B8"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                    </View>
+                    <TouchableOpacity style={styles.selectBtn} onPress={selectAll}>
+                        <MaterialCommunityIcons 
+                            name={selectedWorkers.length === filteredWorkers.length ? "checkbox-marked" : "checkbox-blank-outline"} 
+                            size={24} color="#2563EB" 
+                        />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Bulk Actions Header */}
+                <View style={styles.actionHeader}>
+                    <TouchableOpacity 
+                        style={styles.sitePicker}
+                        onPress={() => setProjectModalVisible(true)}
+                    >
+                        <MaterialCommunityIcons name="office-building" size={20} color="#6366F1" />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={styles.pickerHint}>TARGET JOBSITE</Text>
+                            <Text style={styles.pickerValue} numberOfLines={1}>{selectedProject?.name || 'Select Site'}</Text>
+                        </View>
+                        <MaterialCommunityIcons name="chevron-down" size={20} color="#CBD5E1" />
+                    </TouchableOpacity>
+
+                    <View style={styles.bulkBtns}>
+                        <TouchableOpacity 
+                            style={[styles.bulkBtn, { backgroundColor: '#10B981' }, (selectedWorkers.length === 0 || isProcessing) && { opacity: 0.5 }]}
+                            onPress={handleBulkClockIn}
+                            disabled={selectedWorkers.length === 0 || isProcessing}
+                        >
+                            <MaterialCommunityIcons name="login" size={18} color="#fff" />
+                            <Text style={styles.bulkBtnTxt}>IN</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[styles.bulkBtn, { backgroundColor: '#F43F5E' }, (selectedWorkers.length === 0 || isProcessing) && { opacity: 0.5 }]}
+                            onPress={handleBulkClockOut}
+                            disabled={selectedWorkers.length === 0 || isProcessing}
+                        >
+                            <MaterialCommunityIcons name="logout" size={18} color="#fff" />
+                            <Text style={styles.bulkBtnTxt}>OUT</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
 
             <FlatList
                 data={filteredWorkers}
@@ -290,13 +335,18 @@ const CrewClockScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F1F5F9' },
-    loader: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 10, justifyContent: 'center', alignItems: 'center' },
-    
-    header: { backgroundColor: '#fff', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, paddingBottom: 20 },
-    titleSection: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    screenTitle: { fontSize: 26, fontWeight: '900', color: '#0F172A' },
-    screenSubtitle: { fontSize: 10, fontWeight: '800', color: '#64748B', marginTop: 4, letterSpacing: 0.5 },
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
+    topInfo: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
+    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', height: 48, borderRadius: 12, paddingHorizontal: 15 },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 13, fontWeight: '700', color: '#1E293B' },
+    selectBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+
+    actionHeader: { flexDirection: 'row', gap: 10 },
+    sitePicker: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 15, borderRadius: 14, height: 50 },
+    pickerHint: { fontSize: 7, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
+    pickerValue: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
     
     liveIndicator: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#DCFCE7' },
     pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', marginRight: 6 },
