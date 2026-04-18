@@ -396,6 +396,10 @@ const createTask = async (req, res, next) => {
 
         res.status(201).json(populated);
     } catch (error) {
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: 'Validation Failed', errors: messages });
+        }
         next(error);
     }
 };
@@ -638,6 +642,10 @@ const updateTask = async (req, res, next) => {
 
         res.json(resData);
     } catch (error) {
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: 'Validation Failed', errors: messages });
+        }
         console.error('[updateTask] Critical Error:', error);
         next(error);
     }

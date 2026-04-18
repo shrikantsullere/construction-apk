@@ -295,8 +295,9 @@ export const AppProvider = ({ children }) => {
 
             const payload = {
                 ...newTask,
+                category: (newTask.category || 'TASK').toUpperCase(),
                 status: statusMap[newTask.status] || 'todo',
-                priority: newTask.priority || 'Medium',
+                priority: newTask.priority ? (newTask.priority.charAt(0).toUpperCase() + newTask.priority.slice(1).toLowerCase()) : 'Medium',
                 // If assignedTo is a member name, we should ideally find their ID
                 // For now, let's just make sure we don't crash and try to send what's there
                 assignedTo: Array.isArray(newTask.assignedTo) ? newTask.assignedTo : []
@@ -540,7 +541,6 @@ export const AppProvider = ({ children }) => {
                 if (!pId) {
                     throw new Error('Project selection required for clock-in');
                 }
-                console.log('--- ATTEMPTING CLOCK-IN TO ---', { projectId: pId, taskId: tId });
                 const res = await api.post('/timelogs/clock-in', {
                     projectId: pId,
                     taskId: tId,

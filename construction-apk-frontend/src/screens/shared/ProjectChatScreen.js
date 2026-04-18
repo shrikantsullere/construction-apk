@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert, Keyboard } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
@@ -27,6 +27,13 @@ const ProjectChatScreen = ({ route, navigation }) => {
         };
         load();
     }, [targetId]);
+
+    useEffect(() => {
+        const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+        });
+        return () => showSubscription.remove();
+    }, []);
 
     const chatMessages = (messages || []).filter(m => {
         const mProjId = m.projectId?.toString();
@@ -147,7 +154,7 @@ const ProjectChatScreen = ({ route, navigation }) => {
             
             <KeyboardAvoidingView 
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 <FlatList
@@ -198,7 +205,14 @@ const styles = StyleSheet.create({
     theirTime: { color: '#94A3B8' },
     attachmentContainer: { marginBottom: 6, borderRadius: 12, overflow: 'hidden' },
     attachmentImage: { width: 220, height: 220, borderRadius: 12 },
-    footerContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 40 : 24, paddingTop: 12, backgroundColor: '#F8FAFC' },
+    footerContainer: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 16, 
+        paddingBottom: Platform.OS === 'ios' ? 30 : 10, 
+        paddingTop: 12, 
+        backgroundColor: '#F8FAFC' 
+    },
     whatsAppInputLine: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 28, paddingHorizontal: 16, minHeight: 52, borderWidth: 1, borderColor: '#E2E8F0', marginRight: 10 },
     sideIconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
     mainInputField: { flex: 1, fontSize: 16, color: '#1E293B', paddingVertical: 10, fontWeight: '500' },

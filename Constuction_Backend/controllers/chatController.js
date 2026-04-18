@@ -132,8 +132,8 @@ const getRoomMessages = async (req, res, next) => {
                 if (room.roomType === 'PROJECT_GROUP' && room.projectId) {
                     const project = await Project.findById(room.projectId);
                     if (project) {
-                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
-                        const isPM = project.pmId?.toString() === _id.toString();
+                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN', 'ADMIN'].includes(role);
+                        const isPM = project.pmId?.toString() === _id.toString() || role === 'PM';
                         const isClient = project.clientId?.toString() === _id.toString();
                         const isCreator = project.createdBy?.toString() === _id.toString();
 
@@ -153,6 +153,11 @@ const getRoomMessages = async (req, res, next) => {
                             }
                         }
                     }
+                }
+
+                const internalRoles = ['COMPANY_OWNER', 'PM', 'FOREMAN', 'WORKER', 'SUPER_ADMIN', 'ADMIN'];
+                if (room.roomType === 'INTERNAL' && internalRoles.includes(role)) {
+                    shouldJoin = true;
                 }
 
                 if (!shouldJoin && room.createdBy?.toString() === _id.toString()) {
@@ -193,37 +198,65 @@ const getRoomMessages = async (req, res, next) => {
 // @access  Private
 const sendMessage = async (req, res, next) => {
     try {
-        let { roomId, message, attachments, projectId } = req.body;
+        let { roomId, message, attachments, projectId, receiverId } = req.body;
         const { _id, companyId, role } = req.user;
 
-        if (!roomId && !projectId) {
-            res.status(400);
-            return next(new Error('Destination Room ID or Project ID is required'));
-        }
-
-        // 1. SMART RESOLUTION: If roomId looks like a Project ID, resolve it
+        // 1. SMART RESOLUTION (Project -> Room)
         if (roomId && !projectId && mongoose.Types.ObjectId.isValid(roomId)) {
             const projectExists = await Project.exists({ _id: roomId });
-            if (projectExists) {
-                projectId = roomId;
-            }
+            if (projectExists) projectId = roomId;
         }
 
-        // 2. FIND OR RESOLVE ROOM
+        // 2. SMART RESOLUTION (User -> Direct Room)
+        // If frontend passes receiverId OR if roomId is actually a userId
+        let targetUserId = receiverId;
+        if (roomId && !targetUserId && mongoose.Types.ObjectId.isValid(roomId)) {
+            const userExists = await User.exists({ _id: roomId });
+            if (userExists) targetUserId = roomId;
+        }
+
         let actualRoomId = roomId;
+
+        // Resolve Project Group Room
         if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
             const room = await ChatRoom.findOne({ projectId, roomType: 'PROJECT_GROUP' });
-            if (room) {
-                actualRoomId = room._id;
-            } else if (!roomId) {
-                res.status(404);
-                return next(new Error('Project chat room not found'));
+            if (room) actualRoomId = room._id;
+        }
+
+        // Resolve or Create Direct Room
+        if (targetUserId && mongoose.Types.ObjectId.isValid(targetUserId)) {
+            const existingParticipants = await ChatParticipant.aggregate([
+                { $match: { userId: { $in: [new mongoose.Types.ObjectId(_id), new mongoose.Types.ObjectId(targetUserId)] } } },
+                { $group: { _id: "$roomId", count: { $sum: 1 } } },
+                { $match: { count: 2 } }
+            ]);
+
+            let directRoom = null;
+            if (existingParticipants.length > 0) {
+                for (const ep of existingParticipants) {
+                    directRoom = await ChatRoom.findOne({ _id: ep._id, roomType: 'DIRECT' });
+                    if (directRoom) break;
+                }
             }
+
+            if (!directRoom) {
+                // Check if internal roles can message each other
+                const targetUser = await User.findById(targetUserId);
+                if (targetUser) {
+                    directRoom = await ChatRoom.create({ companyId, roomType: 'DIRECT', isGroup: false });
+                    await ChatParticipant.create([
+                        { roomId: directRoom._id, userId: _id, companyId, roleAtJoining: role },
+                        { roomId: directRoom._id, userId: targetUserId, companyId, roleAtJoining: targetUser.role }
+                    ]);
+                }
+            }
+
+            if (directRoom) actualRoomId = directRoom._id;
         }
 
         if (!actualRoomId || !mongoose.Types.ObjectId.isValid(actualRoomId)) {
             res.status(400);
-            return next(new Error('Valid Room ID is required'));
+            return next(new Error('Valid Room ID, Project ID, or Receiver ID is required'));
         }
 
         // 3. AUTHORIZATION CHECK (Comprehensive — handles ALL room types)
@@ -259,8 +292,8 @@ const sendMessage = async (req, res, next) => {
                 if (room.roomType === 'PROJECT_GROUP' && room.projectId) {
                     const project = await Project.findById(room.projectId);
                     if (project) {
-                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN'].includes(role);
-                        const isPM = project.pmId?.toString() === _id.toString();
+                        const isAdmin = ['COMPANY_OWNER', 'SUPER_ADMIN', 'ADMIN'].includes(role);
+                        const isPM = project.pmId?.toString() === _id.toString() || role === 'PM';
                         const isClient = project.clientId?.toString() === _id.toString();
                         const isCreator = project.createdBy?.toString() === _id.toString();
 
@@ -285,6 +318,12 @@ const sendMessage = async (req, res, next) => {
                             }
                         }
                     }
+                }
+
+                // --- INTERNAL COMPANY ROOMS ---
+                const internalRoles = ['COMPANY_OWNER', 'PM', 'FOREMAN', 'WORKER', 'SUPER_ADMIN', 'ADMIN'];
+                if (room.roomType === 'INTERNAL' && internalRoles.includes(role)) {
+                    isAuthorized = true;
                 }
 
                 // --- GENERIC ROOMS (custom groups, etc.) ---
@@ -586,13 +625,13 @@ const syncProjectParticipants = async (projectId) => {
         if (project.clientId) userIds.add(project.clientId.toString());
         if (project.createdBy) userIds.add(project.createdBy.toString());
 
-        // Add all Company Owners
-        const owners = await User.find({
+        // Add all Company Admins and Owners
+        const admins = await User.find({
             companyId: project.companyId,
-            role: 'COMPANY_OWNER',
+            role: { $in: ['COMPANY_OWNER', 'ADMIN', 'SUPER_ADMIN'] },
             isActive: true
         }).select('_id');
-        owners.forEach(o => userIds.add(o._id.toString()));
+        admins.forEach(a => userIds.add(a._id.toString()));
 
         // Jobs (Foremen & Workers)
         const jobs = await Job.find({ projectId }).select('foremanId assignedWorkers');

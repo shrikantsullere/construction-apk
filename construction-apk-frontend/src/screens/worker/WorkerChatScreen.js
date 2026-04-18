@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions, Alert, Keyboard } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SPACING, SHADOWS } from '../../constants/theme';
@@ -26,6 +26,13 @@ const WorkerChatScreen = ({ navigation, route }) => {
         };
         load();
     }, [room?.id]);
+
+    useEffect(() => {
+        const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+        });
+        return () => showSubscription.remove();
+    }, []);
 
     const roomMessages = (messages || []).filter(m => {
         if (!room) return false;
@@ -179,7 +186,7 @@ const WorkerChatScreen = ({ navigation, route }) => {
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 <FlatList
@@ -269,8 +276,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 10,
-        paddingBottom: Platform.OS === 'ios' ? 45 : 30,
+        paddingBottom: Platform.OS === 'ios' ? 30 : 10,
         paddingTop: 10,
+        backgroundColor: '#F8FAFC'
     },
     whatsAppInputLine: {
         flexDirection: 'row',

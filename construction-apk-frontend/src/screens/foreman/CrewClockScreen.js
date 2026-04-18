@@ -2,52 +2,23 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     TextInput, ActivityIndicator, SafeAreaView, Modal,
-    StatusBar, Platform, ScrollView, Alert, Pressable, Dimensions
+    StatusBar, Platform, ScrollView, Alert, Dimensions, RefreshControl
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import api from '../../utils/api';
-import * as Location from 'expo-location';
 import WorkerHeader from '../../components/WorkerHeader';
 import { COLORS, SHADOWS, SPACING } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
-// ─── Toast Component ─────────────────────────────────────────────────────────
-const Toast = ({ visible, message, type }) => {
-    if (!visible) return null;
-    const isSuccess = type === 'success';
-    return (
-        <View style={[toastStyles.wrap, isSuccess ? toastStyles.success : toastStyles.error]}>
-            <MaterialCommunityIcons
-                name={isSuccess ? 'check-circle' : 'alert-circle'}
-                size={18} color="#fff"
-            />
-            <Text style={toastStyles.text}>{message}</Text>
-        </View>
-    );
-};
-
-const toastStyles = StyleSheet.create({
-    wrap: {
-        position: 'absolute', top: Platform.OS === 'ios' ? 120 : 100,
-        alignSelf: 'center', zIndex: 9999, flexDirection: 'row',
-        alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingVertical: 12,
-        borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2, shadowRadius: 8, elevation: 10,
-    },
-    success: { backgroundColor: '#10B981' },
-    error: { backgroundColor: '#EF4444' },
-    text: { color: '#fff', fontWeight: '800', fontSize: 13 },
-});
-
 const CrewClockScreen = ({ navigation }) => {
     const { projects, user } = useApp();
-
-    const [workers, setWorkers]               = useState([]);
-    const [loading, setLoading]               = useState(true);
-    const [isProcessing, setIsProcessing]     = useState(false);
-    const [searchQuery, setSearchQuery]       = useState('');
+    const [workers, setWorkers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedWorkers, setSelectedWorkers] = useState([]);
     const [selectedProject, setSelectedProject] = useState(null);
 
@@ -55,41 +26,14 @@ const CrewClockScreen = ({ navigation }) => {
     const [projectModalVisible, setProjectModalVisible] = useState(false);
     
     // Stats
-    const [stats, setStats] = useState({ onSite: 0, offDuty: 0, total: 0 });
+    const [stats, setStats] = useState({ onSite: 0, scheduled: 0, total: 0 });
 
-    // Toast
-    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
-
-    const showToast = (message, type = 'success') => {
-        setToast({ visible: true, message, type });
-        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
-    };
-
-    // ── Live 1-second ticker ──────────────────────────────────────────────
+    // Live Ticker for metrics
     const [now, setNow] = useState(new Date());
-    const tickRef = useRef(null);
     useEffect(() => {
-        tickRef.current = setInterval(() => setNow(new Date()), 1000);
-        return () => clearInterval(tickRef.current);
+        const interval = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(interval);
     }, []);
-
-    const getElapsed = (clockInISO) => {
-        if (!clockInISO) return '--:--';
-        const diff = Math.max(0, now.getTime() - new Date(clockInISO).getTime());
-        const h = Math.floor(diff / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        if (h > 0) return `${h}h ${m}m`;
-        if (m > 0) return `${m}m ${s}s`;
-        return `${s}s`;
-    };
-
-    // ── Auto-select first project ─────────────────────────────────────────
-    useEffect(() => {
-        if (projects?.length > 0 && !selectedProject) {
-            setSelectedProject(projects[0]);
-        }
-    }, [projects]);
 
     // ── Fetch crew data ───────────────────────────────────────────────────
     const fetchCrewData = useCallback(async () => {
@@ -112,38 +56,37 @@ const CrewClockScreen = ({ navigation }) => {
                     isClockedIn: !!activeLog,
                     activeLogId: activeLog?._id || activeLog?.id || null,
                     clockInISO: activeLog?.clockIn || null,
-                    clockInFormatted: activeLog?.clockIn
-                        ? new Date(activeLog.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : '--:--',
-                    site: activeLog?.projectId?.name || 'Assigned Site',
+                    siteName: activeLog?.projectId?.name || 'Assigned Site',
                 };
             });
 
             setWorkers(enriched);
             setStats({
                 onSite: enriched.filter(w => w.isClockedIn).length,
-                offDuty: enriched.filter(w => !w.isClockedIn).length,
+                scheduled: enriched.length, // Matching software logic for "Scheduled Today" placeholder
                 total: enriched.length,
             });
         } catch (err) {
             console.error('Crew fetch error:', err);
-            showToast('Failed to load crew data', 'error');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     }, [workers.length]);
 
     useEffect(() => {
-        const unsub = navigation.addListener('focus', fetchCrewData);
         fetchCrewData();
-        const bgRefresh = setInterval(fetchCrewData, 30000);
-        return () => { unsub(); clearInterval(bgRefresh); };
-    }, [navigation, fetchCrewData]);
+        if (projects?.length > 0 && !selectedProject) setSelectedProject(projects[0]);
+    }, [projects]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchCrewData();
+    };
 
     const filteredWorkers = workers.filter(w => {
         const query = searchQuery.toLowerCase();
-        return (w.fullName || w.name || '').toLowerCase().includes(query) ||
-               (w.site || '').toLowerCase().includes(query);
+        return (w.fullName || w.name || '').toLowerCase().includes(query);
     });
 
     const toggleSelection = (id) => {
@@ -152,272 +95,260 @@ const CrewClockScreen = ({ navigation }) => {
         );
     };
 
-    const selectAll = () => {
-        if (selectedWorkers.length === filteredWorkers.length) {
-            setSelectedWorkers([]);
-        } else {
-            setSelectedWorkers(filteredWorkers.map(w => w._id || w.id).filter(Boolean));
-        }
-    };
-
-    const handleBulkClockIn = async () => {
+    const handleBulkAction = async (action) => {
+        if (selectedWorkers.length === 0) return;
         const projId = selectedProject?._id || selectedProject?.id;
-        if (!projId) { showToast('Select a site first', 'error'); return; }
-        if (selectedWorkers.length === 0) return;
+        if (action === 'in' && !projId) {
+            Alert.alert('Selection Required', 'Please select a jobsite before clocking in.');
+            return;
+        }
 
         try {
             setIsProcessing(true);
-            await Promise.all(selectedWorkers.map(id => api.post('/timelogs/clock-in', {
+            const endpoint = action === 'in' ? '/timelogs/clock-in' : '/timelogs/clock-out';
+            await Promise.all(selectedWorkers.map(id => api.post(endpoint, {
                 userId: id,
-                projectId: projId,
-                latitude: 0,
-                longitude: 0
+                ...(action === 'in' && { projectId: projId, latitude: 0, longitude: 0 })
             })));
-            showToast(`Success: ${selectedWorkers.length} crew checked-in`);
+            
             setSelectedWorkers([]);
             fetchCrewData();
         } catch (err) {
-            showToast('Check-in failed', 'error');
+            Alert.alert('Operation Failed', 'Could not sync clock status with server.');
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const handleBulkClockOut = async () => {
-        if (selectedWorkers.length === 0) return;
-        try {
-            setIsProcessing(true);
-            await Promise.all(selectedWorkers.map(id => api.post('/timelogs/clock-out', { userId: id })));
-            showToast(`Success: ${selectedWorkers.length} crew clocked-out`);
-            setSelectedWorkers([]);
-            fetchCrewData();
-        } catch (err) {
-            showToast('Clock-out failed', 'error');
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const renderWorkerItem = ({ item }) => (
-        <TouchableOpacity 
-            style={[styles.workerCard, selectedWorkers.includes(item._id) && styles.selectedCard]}
-            onPress={() => toggleSelection(item._id)}
-        >
-            <View style={styles.cardTop}>
-                <View style={styles.avatarBox}>
-                    <Text style={styles.avatarTxt}>{(item.fullName || item.name || 'U').charAt(0).toUpperCase()}</Text>
+    const renderWorkerRow = ({ item }) => {
+        const isSelected = selectedWorkers.includes(item._id);
+        return (
+            <TouchableOpacity 
+                style={[styles.row, isSelected && styles.selectedRow]}
+                onPress={() => toggleSelection(item._id)}
+                activeOpacity={0.7}
+            >
+                {/* Checkbox Col */}
+                <View style={styles.checkCol}>
+                    <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+                        {isSelected && <MaterialCommunityIcons name="check" size={14} color="#fff" />}
+                    </View>
                 </View>
-                <View style={styles.workerInfo}>
-                    <Text style={styles.workerName}>{item.fullName || item.name}</Text>
-                    <View style={styles.statusRow}>
-                        <View style={[styles.statusDot, { backgroundColor: item.isClockedIn ? '#10B981' : '#F43F5E' }]} />
-                        <Text style={[styles.statusTxt, { color: item.isClockedIn ? '#10B981' : '#F43F5E' }]}>
-                            {item.isClockedIn ? 'ON SITE' : 'OFF DUTY'}
+
+                {/* Identity Col */}
+                <View style={styles.identityCol}>
+                    <View style={styles.avatar}>
+                        <Text style={styles.avatarTxt}>{(item.fullName || 'W').charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.workerMeta}>
+                        <Text style={styles.workerName}>{item.fullName}</Text>
+                        <Text style={styles.workerRole}>WORKER</Text>
+                    </View>
+                </View>
+
+                {/* Jobsite Col */}
+                <View style={styles.siteCol}>
+                    <View style={styles.sitePill}>
+                         <MaterialCommunityIcons name="office-building-marker" size={14} color="#94A3B8" />
+                         <Text style={styles.siteTxt} numberOfLines={1}>{item.siteName}</Text>
+                    </View>
+                </View>
+
+                {/* Status Col */}
+                <View style={styles.statusCol}>
+                    <View style={[styles.statusTag, { backgroundColor: item.isClockedIn ? '#ECFDF5' : '#F8FAFC' }]}>
+                        <Text style={[styles.statusTagTxt, { color: item.isClockedIn ? '#10B981' : '#94A3B8' }]}>
+                            {item.isClockedIn ? 'LIVE ON SITE' : 'OFF DUTY'}
                         </Text>
                     </View>
                 </View>
-                {selectedWorkers.includes(item._id) && (
-                    <MaterialCommunityIcons name="check-circle" size={24} color="#2563EB" />
-                )}
+            </TouchableOpacity>
+        );
+    };
+
+    const ListHeader = () => (
+        <View style={styles.header}>
+            <View style={styles.titleSection}>
+                <View>
+                    <Text style={styles.screenTitle}>Crew Control</Text>
+                    <Text style={styles.screenSubtitle}>MANAGE ON-SITE WORKFORCE ATTENDANCE</Text>
+                </View>
+                <View style={styles.liveIndicator}>
+                    <View style={styles.pulseDot} />
+                    <Text style={styles.liveTxt}>LIVE: {stats.onSite} WORKERS ACTIVE</Text>
+                </View>
             </View>
 
-            <View style={styles.cardStats}>
-                <View style={styles.statLine}>
-                    <MaterialCommunityIcons name="map-marker-outline" size={14} color="#94A3B8" />
-                    <Text style={styles.statVal} numberOfLines={1}>{item.site}</Text>
+            {/* Stats Triple Cards */}
+            <View style={styles.statsGrid}>
+                <View style={[styles.statCard, SHADOWS.small]}>
+                    <View style={styles.statIconBox}><MaterialCommunityIcons name="account-group" size={24} color="#2563EB" /></View>
+                    <Text style={styles.statVal}>{stats.total}</Text>
+                    <Text style={styles.statLabel}>TOTAL FLEET</Text>
                 </View>
-                <View style={styles.statLine}>
-                    <MaterialCommunityIcons name="clock-outline" size={14} color="#94A3B8" />
-                    <Text style={styles.statVal}>{item.clockInFormatted}</Text>
-                    {item.isClockedIn && (
-                        <View style={styles.elapsedBadge}>
-                            <Text style={styles.elapsedText}>{getElapsed(item.clockInISO)}</Text>
-                        </View>
-                    )}
+                <View style={[styles.statCard, SHADOWS.small]}>
+                    <View style={[styles.statIconBox, { backgroundColor: '#ECFDF5' }]}><MaterialCommunityIcons name="account-check" size={24} color="#10B981" /></View>
+                    <Text style={styles.statVal}>{stats.onSite}</Text>
+                    <Text style={styles.statLabel}>CURRENT ON SITE</Text>
+                </View>
+                <View style={[styles.statCard, SHADOWS.small]}>
+                    <View style={[styles.statIconBox, { backgroundColor: '#F8FAFC' }]}><MaterialCommunityIcons name="calendar-clock" size={24} color="#64748B" /></View>
+                    <Text style={styles.statVal}>{stats.scheduled}</Text>
+                    <Text style={styles.statLabel}>SCHEDULED TODAY</Text>
                 </View>
             </View>
-        </TouchableOpacity>
+
+            {/* Control Bar */}
+            <View style={styles.controlBar}>
+                <View style={styles.searchBox}>
+                    <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
+                    <TextInput 
+                        style={styles.searchInput}
+                        placeholder="Search crew members..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                </View>
+                <TouchableOpacity style={styles.siteSelect} onPress={() => setProjectModalVisible(true)}>
+                    <MaterialCommunityIcons name="map-marker" size={18} color="#2563EB" />
+                    <Text style={styles.siteSelectTxt} numberOfLines={1}>{selectedProject?.name || 'Select Job'}</Text>
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.bulkRow}>
+                <TouchableOpacity 
+                    style={[styles.bulkBtn, styles.clockInBtn, selectedWorkers.length === 0 && styles.btnDisabled]}
+                    onPress={() => handleBulkAction('in')}
+                    disabled={selectedWorkers.length === 0}
+                >
+                    <MaterialCommunityIcons name="play" size={20} color="#fff" />
+                    <Text style={styles.btnTxt}>CLOCK IN ({selectedWorkers.length})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={[styles.bulkBtn, styles.clockOutBtn, selectedWorkers.length === 0 && styles.btnDisabled]}
+                    onPress={() => handleBulkAction('out')}
+                    disabled={selectedWorkers.length === 0}
+                >
+                    <MaterialCommunityIcons name="stop" size={20} color="#fff" />
+                    <Text style={styles.btnTxt}>CLOCK OUT ({selectedWorkers.length})</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Table Header Row */}
+            <View style={styles.tableHeader}>
+                <View style={styles.checkCol} />
+                <Text style={[styles.th, styles.identityCol]}>WORKER IDENTITY</Text>
+                <Text style={[styles.th, styles.siteCol]}>ASSIGNED JOBSITE</Text>
+                <Text style={[styles.th, styles.statusCol]}>CURRENT STATUS</Text>
+            </View>
+        </View>
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar barStyle="dark-content" />
-            <WorkerHeader title="Crew Attendance" />
-            <Toast visible={toast.visible} message={toast.message} type={toast.type} />
+            <WorkerHeader title="Crew Control" />
 
-            <View style={styles.topInfo}>
-                <View style={styles.statsStrip}>
-                    <View style={[styles.statItem, { borderLeftColor: '#3B82F6' }]}>
-                        <Text style={styles.statNumb}>{stats.total}</Text>
-                        <Text style={styles.statLabel}>CREW</Text>
-                    </View>
-                    <View style={[styles.statItem, { borderLeftColor: '#10B981' }]}>
-                        <Text style={styles.statNumb}>{stats.onSite}</Text>
-                        <Text style={styles.statLabel}>ON SITE</Text>
-                    </View>
-                    <View style={[styles.statItem, { borderLeftColor: '#F43F5E' }]}>
-                        <Text style={styles.statNumb}>{stats.offDuty}</Text>
-                        <Text style={styles.statLabel}>OFF DUTY</Text>
-                    </View>
-                </View>
-
-                <View style={styles.searchRow}>
-                    <View style={styles.searchBar}>
-                        <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
-                        <TextInput 
-                            style={styles.searchInput}
-                            placeholder="Search crew members..."
-                            placeholderTextColor="#94A3B8"
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                    </View>
-                    <TouchableOpacity style={styles.selectBtn} onPress={selectAll}>
-                        <MaterialCommunityIcons 
-                            name={selectedWorkers.length === filteredWorkers.length ? "checkbox-marked" : "checkbox-blank-outline"} 
-                            size={24} color="#2563EB" 
-                        />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Bulk Actions Header */}
-                <View style={styles.actionHeader}>
-                    <TouchableOpacity 
-                        style={styles.sitePicker}
-                        onPress={() => setProjectModalVisible(true)}
-                    >
-                        <MaterialCommunityIcons name="office-building" size={20} color="#6366F1" />
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                            <Text style={styles.pickerHint}>TARGET JOBSITE</Text>
-                            <Text style={styles.pickerValue} numberOfLines={1}>{selectedProject?.name || 'Select Site'}</Text>
-                        </View>
-                        <MaterialCommunityIcons name="chevron-down" size={20} color="#CBD5E1" />
-                    </TouchableOpacity>
-
-                    <View style={styles.bulkBtns}>
-                        <TouchableOpacity 
-                            style={[styles.bulkBtn, { backgroundColor: '#10B981' }, (selectedWorkers.length === 0 || isProcessing) && { opacity: 0.5 }]}
-                            onPress={handleBulkClockIn}
-                            disabled={selectedWorkers.length === 0 || isProcessing}
-                        >
-                            <MaterialCommunityIcons name="login" size={18} color="#fff" />
-                            <Text style={styles.bulkBtnTxt}>IN</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={[styles.bulkBtn, { backgroundColor: '#F43F5E' }, (selectedWorkers.length === 0 || isProcessing) && { opacity: 0.5 }]}
-                            onPress={handleBulkClockOut}
-                            disabled={selectedWorkers.length === 0 || isProcessing}
-                        >
-                            <MaterialCommunityIcons name="logout" size={18} color="#fff" />
-                            <Text style={styles.bulkBtnTxt}>OUT</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
+            {isProcessing && <View style={styles.loader}><ActivityIndicator color="#2563EB" size="large" /></View>}
 
             <FlatList
                 data={filteredWorkers}
                 keyExtractor={item => item._id}
-                renderItem={renderWorkerItem}
-                contentContainerStyle={styles.list}
+                renderItem={renderWorkerRow}
+                ListHeaderComponent={ListHeader}
+                contentContainerStyle={{ paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    loading ? (
-                        <ActivityIndicator style={{ marginTop: 50 }} color="#2563EB" />
-                    ) : (
-                        <View style={styles.empty}>
-                            <MaterialCommunityIcons name="account-search-outline" size={60} color="#E2E8F0" />
-                            <Text style={styles.emptyTxt}>No crew members found.</Text>
-                        </View>
-                    )
-                }
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             />
 
-            {/* Site Picker Modal */}
-            <Modal visible={projectModalVisible} transparent animationType="slide">
+            {/* Job Select Modal */}
+            <Modal visible={projectModalVisible} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Switch Jobsite</Text>
-                            <TouchableOpacity onPress={() => setProjectModalVisible(false)}>
-                                <MaterialCommunityIcons name="close" size={24} color="#0F172A" />
-                            </TouchableOpacity>
-                        </View>
+                        <Text style={styles.modalTitle}>Select Target Jobsite</Text>
                         <FlatList
-                            data={projects || []}
-                            keyExtractor={item => item._id}
+                            data={projects}
+                            keyExtractor={p => p._id}
                             renderItem={({ item }) => (
                                 <TouchableOpacity 
-                                    style={[styles.modalItem, selectedProject?._id === item._id && styles.modalItemSelected]}
+                                    style={styles.modalItem}
                                     onPress={() => { setSelectedProject(item); setProjectModalVisible(false); }}
                                 >
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[styles.modalItemName, selectedProject?._id === item._id && { color: '#fff' }]}>{item.name}</Text>
-                                        <Text style={[styles.modalItemLoc, selectedProject?._id === item._id && { color: 'rgba(255,255,255,0.7)' }]}>{item.location || 'Primary Site'}</Text>
-                                    </View>
-                                    {selectedProject?._id === item._id && <MaterialCommunityIcons name="check-circle" size={22} color="#fff" />}
+                                    <Text style={styles.modalItemTxt}>{item.name}</Text>
+                                    <MaterialCommunityIcons name="chevron-right" size={20} color="#CBD5E1" />
                                 </TouchableOpacity>
                             )}
                         />
+                        <TouchableOpacity style={styles.closeBtn} onPress={() => setProjectModalVisible(false)}>
+                            <Text style={styles.closeTxt}>Close</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFFFFF' },
-    topInfo: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    container: { flex: 1, backgroundColor: '#F1F5F9' },
+    loader: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 10, justifyContent: 'center', alignItems: 'center' },
     
-    statsStrip: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-    statItem: { flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, borderLeftWidth: 4 },
-    statNumb: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
-    statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 1, marginTop: 2 },
-
-    searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
-    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', height: 48, borderRadius: 12, paddingHorizontal: 15 },
-    searchInput: { flex: 1, marginLeft: 10, fontSize: 13, fontWeight: '700', color: '#1E293B' },
-    selectBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-
-    actionHeader: { flexDirection: 'row', gap: 10 },
-    sitePicker: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 15, borderRadius: 14, height: 50 },
-    pickerHint: { fontSize: 7, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
-    pickerValue: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
+    header: { backgroundColor: '#fff', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, paddingBottom: 20 },
+    titleSection: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    screenTitle: { fontSize: 26, fontWeight: '900', color: '#0F172A' },
+    screenSubtitle: { fontSize: 10, fontWeight: '800', color: '#64748B', marginTop: 4, letterSpacing: 0.5 },
     
-    bulkBtns: { flexDirection: 'row', gap: 8 },
-    bulkBtn: { width: 60, borderRadius: 14, justifyContent: 'center', alignItems: 'center', gap: 2 },
-    bulkBtnTxt: { fontSize: 9, fontWeight: '900', color: '#fff' },
+    liveIndicator: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#DCFCE7' },
+    pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', marginRight: 6 },
+    liveTxt: { fontSize: 9, fontWeight: '900', color: '#15803D' },
 
-    list: { padding: 20, paddingBottom: 100 },
-    workerCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', ...SHADOWS.small },
-    selectedCard: { borderColor: '#2563EB', backgroundColor: '#F0F7FF' },
-    cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    avatarBox: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-    avatarTxt: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
-    workerInfo: { flex: 1, marginLeft: 15 },
-    workerName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-    statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
-    statusDot: { width: 8, height: 8, borderRadius: 4 },
-    statusTxt: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+    statsGrid: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 24 },
+    statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 20, padding: 14, alignItems: 'center' },
+    statIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+    statVal: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+    statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginTop: 2 },
 
-    cardStats: { flexDirection: 'row', gap: 20, borderTopWidth: 1, borderTopColor: '#F8FAFC', paddingTop: 12 },
-    statLine: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
-    statVal: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-    elapsedBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 'auto' },
-    elapsedText: { fontSize: 9, fontWeight: '900', color: '#2563EB' },
+    controlBar: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 12 },
+    searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 25, px: 15, paddingHorizontal: 15, height: 48, borderWidth: 1, borderColor: '#E2E8F0' },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 13, fontWeight: '600', color: '#1E293B' },
+    siteSelect: { flex: 0.8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 25, paddingHorizontal: 15, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 },
+    siteSelectTxt: { fontSize: 12, fontWeight: '800', color: '#2563EB' },
 
-    empty: { padding: 50, alignItems: 'center' },
-    emptyTxt: { fontSize: 14, fontWeight: '600', color: '#94A3B8', marginTop: 15 },
+    bulkRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 20 },
+    bulkBtn: { flex: 1, height: 48, borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 4 },
+    clockInBtn: { backgroundColor: '#2563EB' },
+    clockOutBtn: { backgroundColor: '#64748B' },
+    btnDisabled: { opacity: 0.5, elevation: 0 },
+    btnTxt: { color: '#fff', fontSize: 12, fontWeight: '900' },
 
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, maxHeight: '75%' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    modalTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
-    modalItem: { padding: 16, borderRadius: 16, backgroundColor: '#F8FAFC', marginBottom: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
-    modalItemSelected: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-    modalItemName: { fontSize: 15, fontWeight: '800', color: '#1E293B' },
-    modalItemLoc: { fontSize: 11, color: '#94A3B8', marginTop: 2 }
+    tableHeader: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+    th: { fontSize: 9, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
+
+    row: { flexDirection: 'row', paddingVertical: 16, paddingHorizontal: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', alignItems: 'center' },
+    selectedRow: { backgroundColor: '#EFF6FF' },
+    checkCol: { width: 40 },
+    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+    checkboxActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+    identityCol: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+    avatar: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+    avatarTxt: { fontSize: 14, fontWeight: '900', color: '#1E293B' },
+    workerMeta: { marginLeft: 12 },
+    workerName: { fontSize: 14, fontWeight: '900', color: '#0F172A' },
+    workerRole: { fontSize: 9, fontWeight: '900', color: '#2563EB', marginTop: 2 },
+    siteCol: { flex: 0.8 },
+    sitePill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    siteTxt: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+    statusCol: { flex: 0.8, alignItems: 'flex-end' },
+    statusTag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+    statusTagTxt: { fontSize: 9, fontWeight: '900' },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+    modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 20 },
+    modalTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A', marginBottom: 16 },
+    modalItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    modalItemTxt: { fontSize: 15, fontWeight: '700', color: '#1E293B' },
+    closeBtn: { marginTop: 20, alignItems: 'center', padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12 },
+    closeTxt: { fontWeight: '900', color: '#0F172A' }
 });
 
 export default CrewClockScreen;

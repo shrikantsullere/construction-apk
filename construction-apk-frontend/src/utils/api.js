@@ -4,11 +4,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // const LOCAL_URL = 'http://192.168.1.5:8080/api'; // Correct Laptop IP
 // const PROD_URL = 'http://192.168.1.5:8080/api'; // Failover to local
 
-const LOCAL_URL = 'http://192.168.1.4:8080/api';
+const LOCAL_URL = 'http://192.168.1.22:8080/api';
 const PROD_URL = 'https://constuctionbackend-production.up.railway.app/api';
 
 const api = axios.create({
-    baseURL: PROD_URL,
+    baseURL: LOCAL_URL,
     timeout: 60000,
 });
 
@@ -55,7 +55,7 @@ api.interceptors.response.use(
 export const getServerUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    const baseUrl = 'https://constuctionbackend-production.up.railway.app';
+    const baseUrl = 'http://192.168.1.22:8080';
     return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
