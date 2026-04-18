@@ -240,11 +240,7 @@ const SubcontractorTasksScreen = ({ navigation }) => {
             </View>
 
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                <View style={styles.statsRow}>
-                    <View style={[styles.statItem, { backgroundColor: '#FEF2F2' }]}><Text style={styles.statVal}>{stats.overdue}</Text><Text style={styles.statLab}>OVERDUE</Text></View>
-                    <View style={[styles.statItem, { backgroundColor: '#EFF6FF' }]}><Text style={styles.statVal}>{stats.active}</Text><Text style={styles.statLab}>ACTIVE</Text></View>
-                    <View style={[styles.statItem, { backgroundColor: '#F0FDF4' }]}><Text style={styles.statVal}>{stats.done}</Text><Text style={styles.statLab}>DONE</Text></View>
-                </View>
+
 
                 {loading ? <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 40 }} /> : (
                     <View style={{ paddingHorizontal: 20 }}>
