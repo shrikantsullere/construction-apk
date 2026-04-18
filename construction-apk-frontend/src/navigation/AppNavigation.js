@@ -262,6 +262,12 @@ const WorkerDrawerContent = (props) => {
                         labelStyle={{ fontWeight: '800', fontSize: 13, marginLeft: -4 }}
                     />
                     <DrawerItem
+                        label="My Hours (Attendance)"
+                        icon={({ color }) => <MaterialCommunityIcons name="timetable" size={20} color={color} />}
+                        onPress={() => props.navigation.navigate('WorkerLogs')}
+                        labelStyle={{ fontWeight: '800', fontSize: 13, marginLeft: -4 }}
+                    />
+                    <DrawerItem
                         label="Site Discussions"
                         icon={({ color }) => <MaterialCommunityIcons name="message-text" size={20} color={color} />}
                         onPress={() => props.navigation.navigate('Chatboard')}
