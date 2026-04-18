@@ -1087,6 +1087,7 @@ const AppNavigation = () => {
                         <Stack.Screen name="CrewClock" component={CrewClockScreen} />
                         <Stack.Screen name="Photos" component={ForemanPhotosScreen} />
                         <Stack.Screen name="DailyLogs" component={DailyLogsScreen} />
+                        <Stack.Screen name="WorkerLogs" component={WorkerLogsScreen} />
                     </>
                 )}
             </Stack.Navigator>
