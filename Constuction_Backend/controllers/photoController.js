@@ -102,7 +102,12 @@ const uploadPhoto = async (req, res, next) => {
             description
         });
 
-        res.status(201).json(photo);
+        const populated = await Photo.findById(photo._id)
+            .populate('projectId', 'name')
+            .populate('uploadedBy', 'fullName')
+            .lean();
+
+        res.status(201).json(populated);
     } catch (error) {
         next(error);
     }

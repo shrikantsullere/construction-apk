@@ -5,6 +5,73 @@ const Project = require('../models/Project');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 
+/** Find existing DIRECT room between two users, or null */
+async function findExistingDirectRoomId(userIdA, userIdB) {
+    const a = new mongoose.Types.ObjectId(userIdA);
+    const b = new mongoose.Types.ObjectId(userIdB);
+    const existingParticipants = await ChatParticipant.aggregate([
+        { $match: { userId: { $in: [a, b] } } },
+        { $group: { _id: '$roomId', count: { $sum: 1 } } },
+        { $match: { count: 2 } }
+    ]);
+    for (const ep of existingParticipants) {
+        const room = await ChatRoom.findOne({ _id: ep._id, roomType: 'DIRECT' });
+        if (room) return room._id;
+    }
+    return null;
+}
+
+function assertDirectMessagingAllowed(role, targetUser) {
+    const admins = ['COMPANY_OWNER', 'SUPER_ADMIN'];
+    const internalRoles = ['COMPANY_OWNER', 'PM', 'FOREMAN', 'WORKER', 'SUPER_ADMIN'];
+    if (admins.includes(role)) return;
+    if (role === 'PM') {
+        // PMs may DM clients and internal staff (project coordination, photos, RFIs)
+        return;
+    }
+    if (['FOREMAN', 'WORKER'].includes(role)) {
+        if (!internalRoles.includes(targetUser.role)) {
+            const e = new Error('Foreman and Workers are restricted to internal coordination only.');
+            e.statusCode = 403;
+            throw e;
+        }
+        return;
+    }
+    // Client or Subcontractor initiating — allow company admins and PMs
+    const allowedTargetsForExternal = ['COMPANY_OWNER', 'SUPER_ADMIN', 'PM'];
+    if (!allowedTargetsForExternal.includes(targetUser.role)) {
+        const e = new Error('Clients and Subcontractors are only permitted to initiate direct chats with administrators or project managers.');
+        e.statusCode = 403;
+        throw e;
+    }
+}
+
+/** Find or create DIRECT room; returns ChatRoom _id */
+async function resolveDirectChatRoomId(req, peerUserId) {
+    const { _id, companyId, role } = req.user;
+    const existing = await findExistingDirectRoomId(_id, peerUserId);
+    if (existing) return existing;
+
+    const targetUser = await User.findById(peerUserId);
+    if (!targetUser) {
+        const e = new Error('User not found');
+        e.statusCode = 404;
+        throw e;
+    }
+    assertDirectMessagingAllowed(role, targetUser);
+
+    const room = await ChatRoom.create({
+        companyId,
+        roomType: 'DIRECT',
+        isGroup: false
+    });
+    await ChatParticipant.create([
+        { roomId: room._id, userId: _id, companyId, roleAtJoining: role },
+        { roomId: room._id, userId: peerUserId, companyId, roleAtJoining: targetUser.role }
+    ]);
+    return room._id;
+}
+
 // @desc    Get chat rooms for the current user
 // @route   GET /api/chat
 // @access  Private
@@ -107,12 +174,30 @@ const getChatRooms = async (req, res, next) => {
 // @access  Private
 const getRoomMessages = async (req, res, next) => {
     try {
-        const { roomId } = req.params;
+        let { roomId } = req.params;
         const { _id, companyId, role } = req.user;
 
         if (!mongoose.Types.ObjectId.isValid(roomId)) {
             res.status(400);
             return next(new Error('Invalid Room ID'));
+        }
+
+        // Mobile sends peer user id for DMs; resolve to DIRECT ChatRoom id
+        let roomDoc = await ChatRoom.findById(roomId);
+        if (!roomDoc) {
+            const isProject = await Project.exists({ _id: roomId });
+            if (!isProject) {
+                const peerUser = await User.findById(roomId).select('_id');
+                if (peerUser && peerUser._id.toString() !== _id.toString()) {
+                    try {
+                        const resolved = await resolveDirectChatRoomId(req, peerUser._id);
+                        roomId = resolved.toString();
+                    } catch (err) {
+                        res.status(err.statusCode || 403);
+                        return next(err);
+                    }
+                }
+            }
         }
 
         // Verify participation — auto-join if legitimately assigned
@@ -193,7 +278,7 @@ const getRoomMessages = async (req, res, next) => {
 // @access  Private
 const sendMessage = async (req, res, next) => {
     try {
-        let { roomId, message, attachments, projectId } = req.body;
+        let { roomId, message, attachments, projectId, receiverId } = req.body;
         const { _id, companyId, role } = req.user;
 
         if (!roomId && !projectId) {
@@ -224,6 +309,29 @@ const sendMessage = async (req, res, next) => {
         if (!actualRoomId || !mongoose.Types.ObjectId.isValid(actualRoomId)) {
             res.status(400);
             return next(new Error('Valid Room ID is required'));
+        }
+
+        // 2b. DIRECT: app lists team members by user id — roomId/receiverId may be peer user id, not ChatRoom id
+        const preliminaryRoom = await ChatRoom.findById(actualRoomId);
+        if (!preliminaryRoom) {
+            const peerCandidate =
+                receiverId && mongoose.Types.ObjectId.isValid(receiverId)
+                    ? receiverId
+                    : actualRoomId;
+            if (peerCandidate && peerCandidate.toString() !== _id.toString()) {
+                const isProject = await Project.exists({ _id: peerCandidate });
+                if (!isProject) {
+                    const peerUser = await User.findById(peerCandidate).select('_id');
+                    if (peerUser) {
+                        try {
+                            actualRoomId = await resolveDirectChatRoomId(req, peerUser._id);
+                        } catch (err) {
+                            res.status(err.statusCode || 400);
+                            return next(err);
+                        }
+                    }
+                }
+            }
         }
 
         // 3. AUTHORIZATION CHECK (Comprehensive — handles ALL room types)
@@ -305,8 +413,9 @@ const sendMessage = async (req, res, next) => {
                         });
                         console.log(`[Auto-Join] User ${_id} (${role}) added to room ${actualRoomId} (${room.roomType})`);
                     } catch (syncErr) {
-                        // Ignore duplicate key errors (race condition safety)
-                        if (syncErr.code !== 11000) {
+                        if (syncErr.code === 11000) {
+                            participant = await ChatParticipant.findOne({ roomId: actualRoomId, userId: _id });
+                        } else {
                             console.error('[Auto-Join Error]', syncErr.message);
                         }
                     }
@@ -320,18 +429,25 @@ const sendMessage = async (req, res, next) => {
             return next(new Error('You are not authorized to send messages to this room'));
         }
 
+        const roomForChat = await ChatRoom.findById(actualRoomId).select('roomType');
+        const effectiveProjectId =
+            roomForChat?.roomType === 'DIRECT' ? null : (projectId || null);
 
         // 4. CREATE MESSAGE
         const chat = await Chat.create({
             companyId,
             sender: _id,
             roomId: actualRoomId,
-            projectId: projectId || null,
+            projectId: effectiveProjectId,
             message,
             attachments
         });
 
         const fullChat = await Chat.findById(chat._id).populate('sender', 'fullName role avatar');
+
+        if (!participant) {
+            participant = await ChatParticipant.findOne({ roomId: actualRoomId, userId: _id });
+        }
 
         // Update sender's lastReadAt if they are a participant
         if (participant) {
@@ -424,79 +540,40 @@ const markAsRead = async (req, res, next) => {
 const getOrCreateDirectRoom = async (req, res, next) => {
     try {
         const { targetUserId } = req.body;
-        const { _id, companyId, role } = req.user;
+        const { _id } = req.user;
 
-        // Check if direct room already exists
-        const existingParticipants = await ChatParticipant.aggregate([
-            { $match: { userId: { $in: [new mongoose.Types.ObjectId(_id), new mongoose.Types.ObjectId(targetUserId)] } } },
-            { $group: { _id: "$roomId", count: { $sum: 1 } } },
-            { $match: { count: 2 } }
-        ]);
-
-        if (existingParticipants.length > 0) {
-            for (const ep of existingParticipants) {
-                const room = await ChatRoom.findOne({ _id: ep._id, roomType: 'DIRECT' });
-                if (room) {
-                    const targetUser = await User.findById(targetUserId).select('fullName role avatar');
-                    return res.json({
-                        id: room._id,
-                        name: targetUser?.fullName || 'Chat',
-                        roomType: 'DIRECT',
-                        isGroup: false,
-                        otherRole: targetUser?.role,
-                        otherUserId: targetUser?._id,
-                        avatar: targetUser?.avatar,
-                        unreadCount: 0,
-                        lastMessage: null
-                    });
-                }
-            }
+        if (!targetUserId || !mongoose.Types.ObjectId.isValid(targetUserId)) {
+            res.status(400);
+            return next(new Error('Valid target user ID is required'));
         }
 
-        // Create new room
-        const targetUser = await User.findById(targetUserId);
-        if (!targetUser) return next(new Error('User not found'));
-
-        // Restriction: Admins message anyone. 
-        // PMs message Staff and Subs (NOT Clients).
-        // Foreman/Workers message only internal.
-        // Client/Subs message only Admins.
-        const admins = ['COMPANY_OWNER', 'SUPER_ADMIN'];
-        const internalRoles = ['COMPANY_OWNER', 'PM', 'FOREMAN', 'WORKER', 'SUPER_ADMIN'];
-
-        if (admins.includes(role)) {
-            // Admin can message anyone
-        } else if (role === 'PM') {
-            // PM cannot message Clients
-            if (targetUser.role === 'CLIENT') {
-                res.status(403);
-                return next(new Error('Project Managers are not permitted to initiate direct chats with Clients.'));
-            }
-        } else if (['FOREMAN', 'WORKER'].includes(role)) {
-            // Foremen and Workers can only message internal team members
-            if (!internalRoles.includes(targetUser.role)) {
-                res.status(403);
-                return next(new Error('Foreman and Workers are restricted to internal coordination only.'));
-            }
-        } else {
-            // Requester is Client or Subcontractor
-            if (!admins.includes(targetUser.role)) {
-                res.status(403);
-                return next(new Error('Clients and Subcontractors are only permitted to initiate direct chats with administrators.'));
-            }
+        const existingId = await findExistingDirectRoomId(_id, targetUserId);
+        if (existingId) {
+            const room = await ChatRoom.findById(existingId);
+            const targetUser = await User.findById(targetUserId).select('fullName role avatar');
+            return res.json({
+                id: room._id,
+                name: targetUser?.fullName || 'Chat',
+                roomType: 'DIRECT',
+                isGroup: false,
+                otherRole: targetUser?.role,
+                otherUserId: targetUser?._id,
+                avatar: targetUser?.avatar,
+                unreadCount: 0,
+                lastMessage: null
+            });
         }
 
-        const room = await ChatRoom.create({
-            companyId,
-            roomType: 'DIRECT',
-            isGroup: false
-        });
+        let roomId;
+        try {
+            roomId = await resolveDirectChatRoomId(req, targetUserId);
+        } catch (err) {
+            res.status(err.statusCode || 403);
+            return next(err);
+        }
 
-        await ChatParticipant.create([
-            { roomId: room._id, userId: _id, companyId, roleAtJoining: role },
-            { roomId: room._id, userId: targetUserId, companyId, roleAtJoining: targetUser.role }
-        ]);
-
+        const room = await ChatRoom.findById(roomId);
+        const targetUser = await User.findById(targetUserId).select('fullName role avatar');
         res.status(201).json({
             id: room._id,
             name: targetUser.fullName,
@@ -511,7 +588,7 @@ const getOrCreateDirectRoom = async (req, res, next) => {
     } catch (error) {
         next(error);
     }
-}
+};
 
 // @desc    Get all users in company for chat directory
 // @route   GET /api/chat/users
@@ -528,8 +605,8 @@ const getChatUsers = async (req, res, next) => {
             // Admins can see everyone
             roleFilter = {};
         } else if (role === 'PM') {
-            // PMs can see everyone EXCEPT Clients
-            roleFilter = { role: { $ne: 'CLIENT' } };
+            // PMs can message anyone in the company (including clients)
+            roleFilter = {};
         } else if (['FOREMAN', 'WORKER'].includes(role)) {
             // Foreman/Worker only see internal
             roleFilter = { role: { $in: internalRoles } };
