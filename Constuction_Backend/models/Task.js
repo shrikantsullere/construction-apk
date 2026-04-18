@@ -15,7 +15,7 @@ const taskSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        enum: ['TASK', 'TODO'],
+        enum: ['TASK', 'TODO', 'task', 'todo', 'in-progress', 'in_progress', 'done', 'completed'],
         default: 'TASK'
     },
     projectId: {
@@ -73,8 +73,8 @@ const taskSchema = new mongoose.Schema({
     },
     priority: {
         type: String,
-        enum: ['Low', 'Medium', 'High'],
-        default: 'Medium'
+        enum: ['low', 'medium', 'high', 'Low', 'Medium', 'High'],
+        default: 'medium'
     },
     attachments: [{
         name: String,

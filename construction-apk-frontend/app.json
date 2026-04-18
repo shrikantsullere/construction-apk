@@ -59,7 +59,8 @@
       "expo-location",
       "expo-document-picker",
       "expo-dev-client",
-      "expo-audio"
+      "expo-audio",
+      "@react-native-community/datetimepicker"
     ],
     "owner": "naliniparas"
   }

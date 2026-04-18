@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Animated, StatusBar, ActivityIndicator, Dimensions, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Animated, StatusBar, ActivityIndicator, Dimensions, RefreshControl, ScrollView, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SHADOWS } from '../../constants/theme';
+import { COLORS, SHADOWS, SIZES } from '../../constants/theme';
 import WorkerHeader from '../../components/WorkerHeader';
 import { useApp } from '../../context/AppContext';
-import { Card } from '../../components/shared/CommonUI';
 
 const { width } = Dimensions.get('window');
 
 const ForemanJobsScreen = ({ navigation }) => {
-    const { projects, refreshData } = useApp();
+    const { jobs, refreshData, loading: appLoading } = useApp();
     const [search, setSearch] = useState('');
     const [activeStatus, setActiveStatus] = useState('ALL');
     const [refreshing, setRefreshing] = useState(false);
@@ -29,86 +28,111 @@ const ForemanJobsScreen = ({ navigation }) => {
         setRefreshing(false);
     };
 
-    const filteredJobs = (projects || []).filter(proj => {
-        const matchesSearch = proj.name?.toLowerCase().includes(search.toLowerCase()) ||
-            proj.location?.toLowerCase().includes(search.toLowerCase());
+    const stats = {
+        active: (jobs || []).filter(j => j.status === 'active' || j.status === 'in_progress').length,
+        planning: (jobs || []).filter(j => j.status === 'planning' || j.status === 'todo').length
+    };
+
+    const filteredJobs = (jobs || []).filter(j => {
+        const matchesSearch = (j.name || j.title || '').toLowerCase().includes(search.toLowerCase()) ||
+            (j.location || j.projectId?.name || '').toLowerCase().includes(search.toLowerCase());
 
         const statusMap = {
-            'PLANNING': 'planning',
-            'ACTIVE': 'active',
-            'COMPLETE': 'completed',
-            'ON HOLD': 'on-hold'
+            'PLANNING': ['planning', 'todo', 'pending'],
+            'ACTIVE': ['active', 'in_progress'],
+            'COMPLETE': ['completed', 'done'],
+            'ON HOLD': ['on-hold']
         };
 
-        const matchesStatus = activeStatus === 'ALL' || proj.status === statusMap[activeStatus];
+        const matchesStatus = activeStatus === 'ALL' || statusMap[activeStatus]?.includes(j.status);
         return matchesSearch && matchesStatus;
     });
 
     const renderJobItem = ({ item }) => {
-        const statusConfig = {
-            'planning': { label: 'Planning', color: '#F97316', bg: '#FFF7ED' },
-            'active': { label: 'In Progress', color: '#3B82F6', bg: '#EFF6FF' },
-            'completed': { label: 'Completed', color: '#10B981', bg: '#ECFDF5' },
-            'on-hold': { label: 'On Hold', color: '#EF4444', bg: '#FEF2F2' }
-        };
-        const config = statusConfig[item.status] || { label: 'Active', color: '#3B82F6', bg: '#EFF6FF' };
-
         return (
-            <Card style={styles.jobCard}>
-                {/* Header: Status + Manage Button */}
-                <View style={styles.cardTop}>
-                    <View style={[styles.statusBadge, { backgroundColor: config.bg, borderColor: config.color + '20' }]}>
-                        <View style={[styles.statusDot, { backgroundColor: config.color }]} />
-                        <Text style={[styles.statusText, { color: config.color }]}>{config.label}</Text>
+            <View style={[styles.jobCard, SHADOWS.medium]}>
+                <View style={styles.cardHeader}>
+                    <View style={styles.iconBox}>
+                        <MaterialCommunityIcons name="briefcase-variant-outline" size={24} color="#2563EB" />
                     </View>
-                    <TouchableOpacity style={styles.manageBtn}>
-                        <Text style={styles.manageBtnText}>Manage Status</Text>
-                        <MaterialCommunityIcons name="chevron-down" size={12} color="#64748B" />
-                    </TouchableOpacity>
+                    <View style={styles.headerRight}>
+                        <Text style={styles.manageLabel}>MANAGE STATUS</Text>
+                        <TouchableOpacity style={styles.statusPill}>
+                            <Text style={styles.statusPillText}>{(item.status || 'PLANNING').toUpperCase().replace('_', ' ')}</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
-                {/* Body: Title + Location */}
                 <View style={styles.cardBody}>
-                    <Text style={styles.jobTitle}>{item.name}</Text>
-                    <View style={styles.locationContainer}>
-                        <MaterialCommunityIcons name="map-marker-outline" size={14} color="#94A3B8" />
+                    <Text style={styles.jobTitle}>{item.name || item.title || 'Untitled Job'}</Text>
+                    <View style={styles.locationRow}>
+                        <MaterialCommunityIcons name="map-marker" size={16} color="#94A3B8" />
                         <Text style={styles.locationText}>{item.location || 'Indore Site'}</Text>
                     </View>
+
+                    <View style={styles.progressContainer}>
+                        <View style={styles.progressLabelRow}>
+                            <Text style={styles.progressLabel}>PROGRESS</Text>
+                            <Text style={styles.progressValue}>{item.progress || 0}%</Text>
+                        </View>
+                        <View style={styles.progressTrack}>
+                            <View style={[styles.progressFill, { width: `${item.progress || 0}%` }]} />
+                        </View>
+                    </View>
                 </View>
 
-                {/* Progress Area */}
-                <View style={styles.progressSection}>
-                    <View style={styles.progressHeader}>
-                        <Text style={styles.progressLabel}>Progress</Text>
-                        <Text style={styles.progressVal}>{item.progress || 0}%</Text>
-                    </View>
-                    <View style={styles.progressBarBg}>
-                        <View style={[styles.progressBarFill, { width: `${item.progress || 0}%`, backgroundColor: config.color }]} />
-                    </View>
-                </View>
-
-                {/* Actions */}
-                <TouchableOpacity
+                <TouchableOpacity 
                     style={styles.viewTasksBtn}
-                    onPress={() => navigation.navigate('ForemanTasks', { projectId: item._id })}
+                    onPress={() => navigation.navigate('ForemanJobDetail', { jobId: item._id })}
+                    activeOpacity={0.8}
                 >
-                    <Text style={styles.viewTasksText}>View Tasks</Text>
-                    <MaterialCommunityIcons name="arrow-right" size={18} color="#fff" />
+                    <MaterialCommunityIcons name="check-circle-outline" size={20} color="#fff" />
+                    <Text style={styles.viewTasksText}>VIEW TASKS</Text>
                 </TouchableOpacity>
-            </Card>
+            </View>
         );
     };
 
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            <WorkerHeader title="Site Management" />
+    const ListHeader = () => (
+        <View>
+            {/* Title Section */}
+            <View style={styles.titleSection}>
+                <Text style={styles.screenTitle}>My Job Assignments</Text>
+                <View style={styles.subtitleRow}>
+                    <MaterialCommunityIcons name="earth" size={16} color="#2563EB" />
+                    <Text style={styles.screenSubtitle}>VIEW YOUR ASSIGNED JOBS AND THEIR TASKS</Text>
+                </View>
+            </View>
 
-            {/* Search & Filter Header */}
-            <View style={styles.stickyHeader}>
-                <View style={styles.searchBar}>
-                    <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
-                    <TextInput
+            {/* Stats Section */}
+            <View style={styles.statsContainer}>
+                <View style={[styles.statCard, SHADOWS.small]}>
+                    <View style={styles.statIconBox}>
+                        <MaterialCommunityIcons name="trending-up" size={24} color="#2563EB" />
+                    </View>
+                    <View style={styles.statContent}>
+                        <Text style={styles.statLabel}>ACTIVE SITES</Text>
+                        <Text style={styles.statValue}>{stats.active}</Text>
+                        <Text style={styles.statSub}>currently operational</Text>
+                    </View>
+                </View>
+                <View style={[styles.statCard, SHADOWS.small]}>
+                    <View style={[styles.statIconBox, { backgroundColor: '#FFF7ED' }]}>
+                        <MaterialCommunityIcons name="calendar-month" size={24} color="#F97316" />
+                    </View>
+                    <View style={styles.statContent}>
+                        <Text style={styles.statLabel}>PRE-CONSTRUCTION</Text>
+                        <Text style={styles.statValue}>{stats.planning}</Text>
+                        <Text style={styles.statSub}>in planning phase</Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* Sticky-like Filter Bar */}
+            <View style={[styles.filterBar, SHADOWS.small]}>
+                <View style={styles.searchContainer}>
+                    <MaterialCommunityIcons name="magnify" size={22} color="#94A3B8" />
+                    <TextInput 
                         style={styles.searchInput}
                         placeholder="Search projects..."
                         placeholderTextColor="#94A3B8"
@@ -116,37 +140,34 @@ const ForemanJobsScreen = ({ navigation }) => {
                         onChangeText={setSearch}
                     />
                 </View>
-
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filterBar}
-                >
-                    {['ALL', 'ACTIVE', 'PLANNING', 'ON HOLD', 'COMPLETE'].map(status => (
-                        <TouchableOpacity
-                            key={status}
-                            style={[styles.filterChip, activeStatus === status && styles.filterChipActive]}
-                            onPress={() => setActiveStatus(status)}
-                        >
-                            <Text style={[styles.filterText, activeStatus === status && styles.filterTextActive]}>
-                                {status === 'ALL' ? 'All Statuses' : status}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+                <TouchableOpacity style={styles.filterMenu}>
+                    <Text style={styles.filterMenuText}>
+                        {activeStatus === 'ALL' ? 'All Statuses' : activeStatus}
+                    </Text>
+                    <MaterialCommunityIcons name="chevron-down" size={16} color="#64748B" />
+                </TouchableOpacity>
             </View>
+        </View>
+    );
 
-            <Animated.FlatList
+    return (
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+            <WorkerHeader title="Job Center" showBranding={true} />
+
+            <FlatList
                 data={filteredJobs}
                 keyExtractor={item => item._id || item.id}
                 renderItem={renderJobItem}
-                contentContainerStyle={styles.list}
+                ListHeaderComponent={ListHeader}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 ListEmptyComponent={
                     <View style={styles.emptyView}>
-                        <MaterialCommunityIcons name="office-building-marker-outline" size={64} color="#E2E8F0" />
-                        <Text style={styles.emptyTitle}>No Sites Found</Text>
-                        <Text style={styles.emptySub}>No projects match your current filters.</Text>
+                        <MaterialCommunityIcons name="office-building-marker" size={60} color="#E2E8F0" />
+                        <Text style={styles.emptyTitle}>No Job Assignments</Text>
+                        <Text style={styles.emptySub}>You don't have any jobs assigned to you at this moment.</Text>
                     </View>
                 }
             />
@@ -155,55 +176,54 @@ const ForemanJobsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    stickyHeader: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', height: 50, borderRadius: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-    searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#1E293B', fontWeight: '700' },
-    filterBar: { flexDirection: 'row', marginTop: 16, gap: 8 },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-    filterChipActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-    filterText: { fontSize: 11, fontWeight: '900', color: '#64748B' },
-    filterTextActive: { color: '#fff' },
+    container: { flex: 1, backgroundColor: '#F1F5F9' },
+    scrollContent: { paddingBottom: 100 },
+    
+    titleSection: { padding: 24, paddingBottom: 16 },
+    screenTitle: { fontSize: 28, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
+    subtitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+    screenSubtitle: { fontSize: 11, fontWeight: '800', color: '#64748B', marginLeft: 6, letterSpacing: 0.5 },
 
-    list: { padding: 20, paddingBottom: 100 },
-    jobCard: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9' },
-    cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, gap: 6 },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusText: { fontSize: 10, fontWeight: '900' },
-    manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    manageBtnText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+    statsContainer: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 24 },
+    statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center' },
+    statIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+    statContent: { marginLeft: 12, flex: 1 },
+    statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 0.5 },
+    statValue: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginVertical: 2 },
+    statSub: { fontSize: 9, fontWeight: '700', color: '#94A3B8', fontStyle: 'italic' },
 
-    cardBody: { marginBottom: 20 },
-    jobTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginBottom: 4 },
-    locationContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    locationText: { fontSize: 13, color: '#94A3B8', fontWeight: '700' },
+    filterBar: { flexDirection: 'row', marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 20, padding: 8, alignItems: 'center', marginBottom: 24 },
+    searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRightWidth: 1, borderRightColor: '#F1F5F9' },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#1E293B' },
+    filterMenu: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8 },
+    filterMenuText: { fontSize: 12, fontWeight: '800', color: '#1E293B' },
 
-    progressSection: { marginBottom: 24 },
-    progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    progressLabel: { fontSize: 11, fontWeight: '900', color: '#475569', letterSpacing: 0.5 },
-    progressVal: { fontSize: 11, fontWeight: '900', color: '#0F172A' },
-    progressBarBg: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
-    progressBarFill: { height: '100%', borderRadius: 4 },
+    jobCard: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 28, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#fff' },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    iconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+    headerRight: { alignItems: 'flex-end' },
+    manageLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginBottom: 6 },
+    statusPill: { backgroundColor: '#0F172A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+    statusPillText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 
-    viewTasksBtn: {
-        height: 54,
-        backgroundColor: '#2563EB',
-        borderRadius: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        elevation: 4,
-        shadowColor: '#2563EB',
-        shadowOpacity: 0.3,
-        shadowRadius: 10
-    },
-    viewTasksText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
+    cardBody: { marginTop: 16, marginBottom: 20 },
+    jobTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A' },
+    locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 },
+    locationText: { fontSize: 13, fontWeight: '700', color: '#94A3B8' },
 
-    emptyView: { padding: 40, alignItems: 'center', marginTop: 50 },
-    emptyTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B', marginTop: 20 },
-    emptySub: { fontSize: 14, fontWeight: '600', color: '#94A3B8', textAlign: 'center', marginTop: 8 }
+    progressContainer: { marginTop: 20 },
+    progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    progressLabel: { fontSize: 10, fontWeight: '900', color: '#64748B', letterSpacing: 1 },
+    progressValue: { fontSize: 11, fontWeight: '900', color: '#0F172A' },
+    progressTrack: { height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' },
+    progressFill: { height: '100%', backgroundColor: '#2563EB', borderRadius: 3 },
+
+    viewTasksBtn: { height: 56, backgroundColor: '#2563EB', borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+    viewTasksText: { color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+
+    emptyView: { padding: 60, alignItems: 'center' },
+    emptyTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B', marginTop: 16 },
+    emptySub: { fontSize: 13, fontWeight: '600', color: '#94A3B8', textAlign: 'center', marginTop: 8 }
 });
 
 export default ForemanJobsScreen;

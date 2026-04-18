@@ -101,6 +101,7 @@ import ForemanRFIListScreen from '../screens/foreman/RFIListScreen';
 import ForemanIssuesScreen from '../screens/foreman/ForemanIssuesScreen';
 import ForemanEquipmentScreen from '../screens/foreman/ForemanEquipmentScreen';
 import ForemanJobsScreen from '../screens/foreman/ForemanJobsScreen';
+import ForemanJobDetailScreen from '../screens/foreman/ForemanJobDetailScreen';
 
 // Client Specific Screens
 import ClientDashboardScreen from '../screens/client/ClientDashboardScreen';
@@ -468,6 +469,7 @@ const ForemanDrawer = () => {
             <Drawer.Screen name="RFIDashboard" component={RFIDashboardScreen} />
             <Drawer.Screen name="RFIList" component={ForemanRFIListScreen} />
             <Drawer.Screen name="ForemanIssues" component={ForemanIssuesScreen} />
+            <Drawer.Screen name="ForemanJobDetail" component={ForemanJobDetailScreen} />
             <Drawer.Screen name="Photos" component={ForemanPhotosScreen} />
             <Drawer.Screen name="Equipment" component={EquipmentScreen} />
             <Drawer.Screen name="PurchaseOrders" component={PurchaseOrdersScreen} />
