@@ -87,6 +87,7 @@ import WorkerChatScreen from '../screens/worker/WorkerChatScreen';
 import WorkerProfileScreen from '../screens/worker/WorkerProfileScreen';
 import WorkerJobTasksScreen from '../screens/worker/WorkerJobTasksScreen';
 import WorkerTimeClockScreen from '../screens/worker/WorkerTimeClockScreen';
+import TaskDetailScreen from '../screens/worker/TaskDetailScreen';
 
 
 // Foreman Specific Screens
@@ -255,6 +256,12 @@ const WorkerDrawerContent = (props) => {
                     label="Site Check-In (My Clock)"
                     icon={({ color }) => <MaterialCommunityIcons name="clock-check" size={20} color={color} />}
                     onPress={() => props.navigation.navigate('TimeClock')}
+                    labelStyle={{ fontWeight: '800', fontSize: 13, marginLeft: -12 }}
+                />
+                <DrawerItem
+                    label="My Hours (Attendance)"
+                    icon={({ color }) => <MaterialCommunityIcons name="timetable" size={20} color={color} />}
+                    onPress={() => props.navigation.navigate('WorkerLogs')}
                     labelStyle={{ fontWeight: '800', fontSize: 13, marginLeft: -12 }}
                 />
                 <DrawerItem
@@ -1055,6 +1062,7 @@ const AppNavigation = () => {
                         <Stack.Screen name="WorkerChat" component={WorkerChatScreen} />
                         <Stack.Screen name="Chatboard" component={WorkerChatboard} />
                         <Stack.Screen name="JobTasks" component={WorkerJobTasksScreen} />
+                        <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
                         <Stack.Screen name="ClientJobs" component={ClientJobsScreen} />
                         <Stack.Screen name="Drawings" component={WorkerDrawingsScreen} />
                     </>

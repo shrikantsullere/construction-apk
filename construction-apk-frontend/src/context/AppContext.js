@@ -313,6 +313,8 @@ export const AppProvider = ({ children }) => {
 
     const updateTask = async (rawId, taskData) => {
         const id = String(rawId || '').trim();
+        console.log(`--- [AppContext] START updateTask ---`, { id, taskTitle: taskData?.title, status: taskData?.status });
+
         if (!id || id === 'undefined' || id === 'null') {
             console.error('--- [AppContext] REJECTING UPDATE: INVALID ID ---', { rawId });
             return false;
@@ -324,7 +326,7 @@ export const AppProvider = ({ children }) => {
                 'pending': 'todo', 'in-progress': 'in_progress', 'completed': 'completed'
             };
 
-            const updateableFields = ['title', 'description', 'status', 'priority', 'dueDate', 'assignedTo', 'projectId', 'companyId', 'category', 'startDate', 'assignedRoleType'];
+            const updateableFields = ['title', 'description', 'status', 'priority', 'dueDate', 'assignedTo', 'projectId', 'companyId', 'category', 'startDate', 'assignedRoleType', 'otp', 'note'];
             const payload = {};
 
             updateableFields.forEach(field => {
@@ -346,15 +348,43 @@ export const AppProvider = ({ children }) => {
             if (!payload.projectId) delete payload.projectId;
             if (!payload.companyId) delete payload.companyId;
 
-            console.log(`--- [AppContext] PATCH /tasks/${id} ---`, payload);
+            console.log(`--- [AppContext] CALLING PATCH /tasks/${id} ---`, {
+                payloadKeys: Object.keys(payload),
+                status: payload.status
+            });
 
             const res = await api.patch(`/tasks/${id}`, payload);
             const updated = res.data;
 
-            setTasks(prev => prev.map(t => (String(t._id || t.id) === id) ? { ...t, ...updated } : t));
+            console.log(`--- [AppContext] UPDATE SUCCESS ---`, { id, model: updated.isJobTask ? 'JobTask' : 'Task' });
+
+            // Update global tasks state
+            setTasks(prev => prev.map(t => {
+                const tId = String(t._id || t.id || '');
+                return (tId === id) ? { ...t, ...updated } : t;
+            }));
+
+            // Sync with worker metrics if applicable
+            if (metrics?.workerMetrics?.assignedTasks) {
+                setMetrics(prev => ({
+                    ...prev,
+                    workerMetrics: {
+                        ...prev.workerMetrics,
+                        assignedTasks: prev.workerMetrics.assignedTasks.map(t => {
+                             const tId = String(t._id || t.id || '');
+                             return (tId === id) ? { ...t, ...updated } : t;
+                        })
+                    }
+                }));
+            }
+
             return true;
         } catch (e) {
-            console.error('Update task error', e.response?.data || e.message);
+            console.error('--- [AppContext] UPDATE TASK FAILED ---');
+            console.error('ID:', id);
+            console.error('Error Status:', e.response?.status);
+            console.error('Error Data:', e.response?.data);
+            console.error('Error Message:', e.message);
             return false;
         }
     };
@@ -517,45 +547,54 @@ export const AppProvider = ({ children }) => {
                     latitude: coords.latitude,
                     longitude: coords.longitude
                 });
-                setIsClockedIn(true);
-                setClockInTime(now);
                 
-                // PERSIST: Save to local storage for app restarts/background recovery
-                await AsyncStorage.setItem('localClockIn', JSON.stringify({ isClockedIn: true, time: now.toISOString(), pId }));
+                const serverLog = res.data;
+                setIsClockedIn(true);
+                setClockInTime(new Date(serverLog.clockIn));
+                
+                // UPDATE LOGS: Add the new clock-in record to the top of the history
+                setTimeLogs(prev => [serverLog, ...prev]);
+                
+                // PERSIST: Save to local storage
+                await AsyncStorage.setItem('localClockIn', JSON.stringify({ isClockedIn: true, time: serverLog.clockIn, pId }));
 
-                // OPTIMISTIC UPDATE: Add to Recent Activity immediately
+                // OPTIMISTIC ACTIVITY UPDATE
                 const activeProject = (projects || []).find(p => p._id === pId);
-                const newActivity = {
+                setActivities(prev => [{
                     type: 'clock_in',
                     createdAt: now.toISOString(),
                     projectId: { _id: pId, name: activeProject?.name || 'Project Site' },
                     taskId: tId
-                };
-                setActivities(prev => [newActivity, ...prev]);
+                }, ...prev]);
 
-                return res.data;
+                return serverLog;
             } else {
                 console.log('--- ATTEMPTING CLOCK-OUT ---');
                 const res = await api.post('/timelogs/clock-out', {
                     latitude: coords.latitude,
                     longitude: coords.longitude
                 });
+                
+                const updatedLog = res.data;
                 setIsClockedIn(false);
                 setClockOutTime(now);
 
-                // PERSIST: Clear local storage on clock-out
+                // UPDATE LOGS: Mark the active log as finished in the local state
+                setTimeLogs(prev => prev.map(log => 
+                    (log._id === updatedLog._id || !log.clockOut) ? updatedLog : log
+                ));
+
+                // PERSIST: Clear local storage
                 await AsyncStorage.removeItem('localClockIn');
 
-                // OPTIMISTIC UPDATE: Add to Recent Activity immediately
-                const lastLog = (timeLogs || [])[0];
-                const newActivity = {
+                // OPTIMISTIC ACTIVITY UPDATE
+                setActivities(prev => [{
                     type: 'clock_out',
                     createdAt: now.toISOString(),
-                    projectId: lastLog?.projectId || { name: 'Project Site' }
-                };
-                setActivities(prev => [newActivity, ...prev]);
+                    projectId: updatedLog.projectId || { name: 'Project Site' }
+                }, ...prev]);
 
-                return res.data;
+                return updatedLog;
             }
         } catch (e) {
             const errorMsg = e.response?.data?.message || e.message;

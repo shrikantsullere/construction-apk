@@ -7,7 +7,7 @@ import { useNavigation, DrawerActions } from '@react-navigation/native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBranding = true, showRight = true }) => {
+const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBranding = true, showRight = true, rightComponent = null }) => {
     const { user, projects, notifications, markNotificationAsRead, unreadChatCount } = useApp();
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
@@ -71,11 +71,6 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                             >
                                 <MaterialCommunityIcons name="arrow-left" size={20} color="#FFFFFF" />
                             </TouchableOpacity>
-                            {title && (
-                                <View style={styles.headerAvatarMini}>
-                                    <Text style={styles.headerAvatarText}>{title.charAt(0)}</Text>
-                                </View>
-                            )}
                         </View>
                     ) : (
                         (user?.role === 'FOREMAN' || user?.role === 'PM' || user?.role === 'CLIENT' || user?.role === 'SUBCONTRACTOR' || user?.role === 'WORKER') && (
@@ -122,41 +117,47 @@ const WorkerHeader = ({ title, hideSearch = false, showBack = false, showBrandin
                     </View>
                 )}
 
-                {showRight && (
-                    <View style={styles.iconSection}>
-                        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Chatboard')}>
-                            <View style={styles.notificationWrapper}>
-                                <MaterialCommunityIcons name="chat-outline" size={24} color="#64748B" />
-                                {unreadChatCount > 0 && (
-                                    <View style={[styles.badge, { backgroundColor: '#3B82F6' }]}>
-                                        <Text style={styles.badgeText}>{unreadChatCount}</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.iconBtn} onPress={() => setIsNotifying(true)}>
-                            <View style={styles.notificationWrapper}>
-                                <MaterialCommunityIcons name="bell-outline" size={24} color="#64748B" />
-                                {unreadCount > 0 && (
-                                    <View style={styles.badge}>
-                                        <Text style={styles.badgeText}>{unreadCount}</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.avatarContainer}
-                            onPress={() => navigation.navigate('Profile')}
-                        >
-                            <View style={styles.avatarInner}>
-                                <Text style={styles.avatarText}>
-                                    {(user?.fullName || user?.name || user?.role || 'U')[0].toUpperCase()}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
+                {rightComponent ? (
+                    <View style={styles.customRightSection}>
+                        {rightComponent}
                     </View>
+                ) : (
+                    showRight && (
+                        <View style={styles.iconSection}>
+                            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Chatboard')}>
+                                <View style={styles.notificationWrapper}>
+                                    <MaterialCommunityIcons name="chat-outline" size={24} color="#64748B" />
+                                    {unreadChatCount > 0 && (
+                                        <View style={[styles.badge, { backgroundColor: '#3B82F6' }]}>
+                                            <Text style={styles.badgeText}>{unreadChatCount}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.iconBtn} onPress={() => setIsNotifying(true)}>
+                                <View style={styles.notificationWrapper}>
+                                    <MaterialCommunityIcons name="bell-outline" size={24} color="#64748B" />
+                                    {unreadCount > 0 && (
+                                        <View style={styles.badge}>
+                                            <Text style={styles.badgeText}>{unreadCount}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.avatarContainer}
+                                onPress={() => navigation.navigate('Profile')}
+                            >
+                                <View style={styles.avatarInner}>
+                                    <Text style={styles.avatarText}>
+                                        {(user?.fullName || user?.name || user?.role || 'U')[0].toUpperCase()}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )
                 )}
             </View>
 
@@ -448,6 +449,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         width: Platform.OS === 'ios' ? 110 : (Dimensions.get('window').width < 360 ? 90 : 105),
         justifyContent: 'flex-end',
+    },
+    customRightSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        minWidth: 80,
     },
     iconBtn: {
         padding: 4,

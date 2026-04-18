@@ -28,11 +28,6 @@ const AppHeader = ({ title, showBack = false, showRight = true, showLogo = false
                             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
                                 <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.primary} />
                             </TouchableOpacity>
-                            {title && (
-                                <View style={styles.headerAvatarMini}>
-                                    <Text style={styles.headerAvatarText}>{title.charAt(0)}</Text>
-                                </View>
-                            )}
                         </View>
                     ) : (
                         <Image 
