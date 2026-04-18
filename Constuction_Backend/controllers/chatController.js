@@ -117,7 +117,7 @@ const getRoomMessages = async (req, res, next) => {
 
         // Verify participation — auto-join if legitimately assigned
         let participant = await ChatParticipant.findOne({ roomId, userId: _id });
-        
+
         if (!participant) {
             // Attempt auto-join based on room type
             const room = await ChatRoom.findById(roomId);
@@ -228,7 +228,7 @@ const sendMessage = async (req, res, next) => {
 
         // 3. AUTHORIZATION CHECK (Comprehensive — handles ALL room types)
         let isAuthorized = false;
-        
+
         // A. Check explicit participation first (fastest path)
         let participant = await ChatParticipant.findOne({ roomId: actualRoomId, userId: _id });
         if (participant) {
@@ -238,16 +238,16 @@ const sendMessage = async (req, res, next) => {
         // B. If not a participant yet, attempt smart auto-join based on room type
         if (!isAuthorized) {
             const room = await ChatRoom.findById(actualRoomId);
-            
+
             if (room) {
                 // --- DIRECT ROOMS ---
                 // If user was supposed to be in a direct room but participant record is missing,
                 // re-add them. This handles edge cases where records were lost or not created.
                 if (room.roomType === 'DIRECT') {
                     // For direct rooms, check if any other participant exists
-                    const otherParticipant = await ChatParticipant.findOne({ 
-                        roomId: actualRoomId, 
-                        userId: { $ne: _id } 
+                    const otherParticipant = await ChatParticipant.findOne({
+                        roomId: actualRoomId,
+                        userId: { $ne: _id }
                     });
                     // If room has another participant, this user should also be in it
                     if (otherParticipant) {
@@ -263,7 +263,7 @@ const sendMessage = async (req, res, next) => {
                         const isPM = project.pmId?.toString() === _id.toString();
                         const isClient = project.clientId?.toString() === _id.toString();
                         const isCreator = project.createdBy?.toString() === _id.toString();
-                        
+
                         if (isAdmin || isPM || isClient || isCreator) {
                             isAuthorized = true;
                         } else {
@@ -273,13 +273,13 @@ const sendMessage = async (req, res, next) => {
                             if (taskAssigned) {
                                 isAuthorized = true;
                             } else {
-                                const jobAssigned = await Job.exists({ 
-                                    projectId: room.projectId, 
+                                const jobAssigned = await Job.exists({
+                                    projectId: room.projectId,
                                     $or: [
-                                        { foremanId: _id }, 
+                                        { foremanId: _id },
                                         { assignedWorkers: _id },
                                         { subcontractorId: _id }
-                                    ] 
+                                    ]
                                 });
                                 if (jobAssigned) isAuthorized = true;
                             }
@@ -343,7 +343,7 @@ const sendMessage = async (req, res, next) => {
         const io = req.app.get('io');
         if (io) {
             io.to(actualRoomId.toString()).emit('new_message', fullChat);
-            
+
             // Background notifications
             const notifyOthers = async () => {
                 const others = await ChatParticipant.find({ roomId: actualRoomId, userId: { $ne: _id } });

@@ -8,8 +8,8 @@ const LOCAL_URL = 'http://192.168.1.4:8080/api';
 const PROD_URL = 'https://constuctionbackend-production.up.railway.app/api';
 
 const api = axios.create({
-    baseURL: PROD_URL, 
-    timeout: 60000, 
+    baseURL: PROD_URL,
+    timeout: 60000,
 });
 
 let inMemoryToken = null;

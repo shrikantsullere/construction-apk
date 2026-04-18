@@ -29,8 +29,8 @@ const ForemanTasksScreen = ({ navigation }) => {
     };
 
     const filteredTasks = (tasks || []).filter(t => {
-        const matchesSearch = t.title?.toLowerCase().includes(search.toLowerCase()) || 
-                             t.projectId?.name?.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = t.title?.toLowerCase().includes(search.toLowerCase()) ||
+            t.projectId?.name?.toLowerCase().includes(search.toLowerCase());
         return matchesSearch;
     });
 
